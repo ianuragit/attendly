@@ -83,6 +83,10 @@ Every release is built and tested automatically by GitHub Actions
 7. Join a Google Meet call. The badge shows the number of people present. Click the icon for the
    popup, or **Open dashboard** for history, groups, exports and settings.
 
+**Not detecting your call?** Reload the Meet tab first: Chrome only runs Attendly in tabs
+opened after it was installed or updated. Then see
+[docs/troubleshooting.md](docs/troubleshooting.md).
+
 **Updating:** download the new `attendly.zip`, replace the folder's contents with it, then click
 the ↻ reload icon on Attendly's card in `chrome://extensions`. Your meetings and settings are
 kept.

@@ -124,3 +124,16 @@ export interface LiveStatus {
   paused: boolean;
   updatedAt: Timestamp;
 }
+
+/**
+ * What the content script sees on a Meet tab while it is NOT tracking a call. Lets the popup
+ * explain why nothing is being recorded.
+ */
+export type PageState = 'no-meeting' | 'waiting-to-join' | 'tracking-off' | 'other-tab';
+
+export interface PageStatus {
+  state: PageState;
+  /** Meeting code from the URL, if any. */
+  code: string | null;
+  updatedAt: Timestamp;
+}

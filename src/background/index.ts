@@ -17,9 +17,27 @@ import {
   type StartReply,
 } from '../lib/messages';
 import { getSettings } from '../lib/settings';
-import type { LiveStatus, MeetingRecord } from '../lib/types';
+import type { LiveStatus, MeetingRecord, PageStatus } from '../lib/types';
 
 const LIVE_KEY = 'live'; // chrome.storage.session: Record<tabId, LiveStatus>
+const PAGES_KEY = 'pages'; // chrome.storage.session: Record<tabId, PageStatus>
+
+type PageMap = Record<string, PageStatus>;
+
+// Serialised like the live map so concurrent tabs don't overwrite each other's entries.
+let pageQueue: Promise<unknown> = Promise.resolve();
+function updatePages(fn: (map: PageMap) => PageMap): Promise<void> {
+  const next = pageQueue.then(async () => {
+    const stored = await chrome.storage.session.get(PAGES_KEY);
+    await chrome.storage.session.set({
+      [PAGES_KEY]: fn((stored[PAGES_KEY] as PageMap | undefined) ?? {}),
+    });
+  });
+  pageQueue = next.catch(() => undefined);
+  return next;
+}
+const withoutPage = (map: PageMap, tabId: number): PageMap =>
+  Object.fromEntries(Object.entries(map).filter(([k]) => k !== String(tabId)));
 
 type LiveMap = Record<string, LiveStatus>;
 
@@ -129,6 +147,7 @@ async function handleStart(
     updatedAt: at,
   };
   await updateLiveMap((map) => ({ ...map, [tabId]: status }));
+  await updatePages((map) => withoutPage(map, tabId));
   await setBadge(tabId, status);
   notifyPages();
   return {
@@ -238,6 +257,18 @@ async function route(msg: Message, sender: chrome.runtime.MessageSender): Promis
     case 'meeting:end':
       if (!isMeetSender(sender) || sender.tab?.id === undefined) return null;
       return handleSave(sender.tab.id, msg.meeting, msg.endedAt);
+    case 'page:status': {
+      const tabId = sender.tab?.id;
+      if (!isMeetSender(sender) || tabId === undefined) return null;
+      const status: PageStatus = { state: msg.state, code: msg.code, updatedAt: Date.now() };
+      await updatePages((map) => ({ ...map, [tabId]: status }));
+      return { ok: true };
+    }
+    case 'page:get': {
+      if (!isExtensionPage(sender)) return null;
+      const stored = await chrome.storage.session.get(PAGES_KEY);
+      return ((stored[PAGES_KEY] as PageMap | undefined) ?? {})[msg.tabId] ?? null;
+    }
     case 'live:get': {
       if (!isExtensionPage(sender)) return null;
       return (await getLiveMap())[msg.tabId] ?? null;
@@ -269,6 +300,7 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  void updatePages((map) => withoutPage(map, tabId));
   void handleTabGone(tabId);
 });
 
@@ -278,6 +310,6 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 chrome.runtime.onStartup.addListener(() => {
   // A fresh browser session: no tabs from before can still be live.
-  void chrome.storage.session.remove(LIVE_KEY).then(sweepStale);
+  void chrome.storage.session.remove([LIVE_KEY, PAGES_KEY]).then(sweepStale);
 });
 void sweepStale();

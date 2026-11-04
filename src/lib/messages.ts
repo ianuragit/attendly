@@ -2,7 +2,14 @@
  * Typed messages between the content script, service worker, popup and dashboard, with
  * runtime validation: the service worker never trusts message shapes blindly.
  */
-import type { LiveStatus, MeetingRecord, ParticipantRecord, Session } from './types';
+import type {
+  LiveStatus,
+  MeetingRecord,
+  PageState,
+  PageStatus,
+  ParticipantRecord,
+  Session,
+} from './types';
 
 /** Fields of a meeting owned by the live tracker (the rest are user-edited in the dashboard). */
 export type LiveMeetingFields = Pick<
@@ -24,6 +31,10 @@ export type Message =
   | { type: 'meeting:save'; meeting: LiveMeetingFields }
   /** content → SW: the call ended (participants already finalised). */
   | { type: 'meeting:end'; meeting: LiveMeetingFields; endedAt: number }
+  /** content → SW: what the tab sees while it isn't tracking (for the popup). */
+  | { type: 'page:status'; state: PageState; code: string | null }
+  /** popup → SW: page status for a tab. Returns PageStatus | null. */
+  | { type: 'page:get'; tabId: number }
   /** popup → SW: live status for a tab. Returns LiveStatus | null. */
   | { type: 'live:get'; tabId: number }
   /** popup → SW → content: pause/resume tracking in a tab. */
@@ -51,6 +62,14 @@ export interface StartAccepted {
 export type SaveReply = { ok: true } | { ok: false; restart: true };
 
 export type LiveGetReply = LiveStatus | null;
+export type PageGetReply = PageStatus | null;
+
+const PAGE_STATES: readonly PageState[] = [
+  'no-meeting',
+  'waiting-to-join',
+  'tracking-off',
+  'other-tab',
+];
 
 // ------------------------------------------------------------------------------- validation
 
@@ -116,6 +135,14 @@ export function isMessage(v: unknown): v is Message {
       return isLiveMeetingFields(v.meeting);
     case 'meeting:end':
       return isLiveMeetingFields(v.meeting) && isNum(v.endedAt);
+    case 'page:status':
+      return (
+        typeof v.state === 'string' &&
+        (PAGE_STATES as readonly string[]).includes(v.state) &&
+        (v.code === null || (isStr(v.code, 64) && MEET_CODE_RE.test(v.code)))
+      );
+    case 'page:get':
+      return isNum(v.tabId);
     case 'live:get':
       return isNum(v.tabId);
     case 'live:setPaused':

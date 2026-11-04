@@ -22,10 +22,9 @@ export const SELECTORS = {
    * Leave-call button: present only once you are actually in the call (not in the lobby /
    * green room). Strategies: Material icon ligature text, English aria-label, legacy jsname.
    */
-  leaveCallIcon:
-    'button i.google-material-icons, button i.google-symbols, button i.material-icons-extended',
   leaveCallIconText: ['call_end'],
-  leaveCallAria: 'button[aria-label*="leave call" i], button[aria-label*="hang up" i]',
+  leaveCallAria:
+    '[aria-label*="leave call" i], [aria-label*="hang up" i], [aria-label*="end call" i], [data-tooltip*="leave call" i]',
   leaveCallJsname: '[jsname="CQylAd"]',
 
   /** Video tile of one participant (also used for screen-share tiles). */
@@ -45,9 +44,7 @@ export const SELECTORS = {
 
   /** Toggle button for the People panel. */
   peopleButtonAria:
-    'button[aria-label*="people" i], button[aria-label*="participants" i], button[aria-label*="everyone" i]',
-  peopleButtonIcon:
-    'button i.google-material-icons, button i.google-symbols, button i.material-icons-extended',
+    'button[aria-label*="people" i], button[aria-label*="participants" i], button[aria-label*="everyone" i], [role="button"][aria-label*="people" i], [role="button"][aria-label*="everyone" i]',
   peopleButtonIconText: ['people', 'group', 'groups', 'people_outline'],
   peopleButtonPanelId: 'button[data-panel-id="1"]',
 
@@ -56,6 +53,13 @@ export const SELECTORS = {
 
   /** Meeting title, when Meet exposes it (scheduled/calendar meetings). */
   meetingTitleAttr: '[data-meeting-title]',
+  /**
+   * Material icon glyphs: Meet renders icons as a ligature word ("call_end", "people") inside
+   * an <i> or <span> with an icon-font class. Matching the word works in every UI language.
+   */
+  iconGlyph: 'i, span[class*="icon" i], span[class*="symbol" i], div[class*="symbol" i]',
+  /** Anything Meet uses as a clickable control. */
+  control: 'button, [role="button"]',
 } as const;
 
 /** Meet tile labels that are not people. */
@@ -74,17 +78,13 @@ export function warnOnce(id: string, message: string): void {
 const text = (el: Element | null | undefined): string =>
   el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 
-/** Finds buttons containing a Material icon whose ligature text is one of `names`. */
-function buttonsByIcon(
-  root: ParentNode,
-  iconSelector: string,
-  names: readonly string[],
-): HTMLElement[] {
+/** Finds controls containing a Material icon glyph whose ligature text is one of `names`. */
+function controlsByIcon(root: ParentNode, names: readonly string[]): HTMLElement[] {
   const out: HTMLElement[] = [];
-  root.querySelectorAll(iconSelector).forEach((icon) => {
-    if (names.includes(text(icon))) {
-      const button = icon.closest('button');
-      if (button) out.push(button);
+  root.querySelectorAll(SELECTORS.iconGlyph).forEach((icon) => {
+    if (icon.children.length === 0 && names.includes(text(icon))) {
+      const control = icon.closest<HTMLElement>(SELECTORS.control);
+      if (control && !out.includes(control)) out.push(control);
     }
   });
   return out;
@@ -97,17 +97,21 @@ function isVisible(el: Element): boolean {
 
 // ------------------------------------------------------------------------------ call presence
 
-/** Meet code from a URL path such as "/abc-defg-hij" (null on the landing page, etc.). */
+/**
+ * Meet code from a URL path. Meet serves calls at "/abc-defg-hij" and also at
+ * "/meet/abc-defg-hij" (seen in the wild, Nov 2026), so the code may be in any path segment.
+ * "/lookup/<name>" nicknames are also accepted. Returns null on the landing page etc.
+ */
 export function meetingCodeFromPath(pathname: string): string | null {
-  const m = /^\/([a-z]{3,4}-[a-z]{4}-[a-z]{3,4})(?:$|[/?#])/i.exec(pathname);
+  const m = /(?:^|\/)([a-z]{3,4}-[a-z]{4}-[a-z]{3,4})(?=$|[/?#])/i.exec(pathname);
   if (m?.[1]) return m[1].toLowerCase();
-  const lookup = /^\/lookup\/([a-z0-9-]{3,63})/i.exec(pathname);
+  const lookup = /\/lookup\/([a-z0-9-]{3,63})/i.exec(pathname);
   return lookup?.[1]?.toLowerCase() ?? null;
 }
 
 /** The leave-call button, if present (i.e. we are in the call, not the lobby). */
 export function findLeaveButton(root: ParentNode = document): HTMLElement | null {
-  const byIcon = buttonsByIcon(root, SELECTORS.leaveCallIcon, SELECTORS.leaveCallIconText);
+  const byIcon = controlsByIcon(root, SELECTORS.leaveCallIconText);
   if (byIcon[0]) return byIcon[0];
   const byAria = root.querySelector<HTMLElement>(SELECTORS.leaveCallAria);
   if (byAria) return byAria;
@@ -237,11 +241,7 @@ export function readPeoplePanel(root: ParentNode = document): SnapshotEntry[] | 
 export function findPeopleButton(root: ParentNode = document): HTMLElement | null {
   const byPanelId = root.querySelector<HTMLElement>(SELECTORS.peopleButtonPanelId);
   if (byPanelId) return byPanelId;
-  const byIcon = buttonsByIcon(
-    root,
-    SELECTORS.peopleButtonIcon,
-    SELECTORS.peopleButtonIconText,
-  ).find(isVisibleOrUnknown);
+  const byIcon = controlsByIcon(root, SELECTORS.peopleButtonIconText).find(isVisibleOrUnknown);
   if (byIcon) return byIcon;
   return root.querySelector<HTMLElement>(SELECTORS.peopleButtonAria);
 }
