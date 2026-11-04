@@ -77,3 +77,29 @@ export function readMeetings(sw: Worker): Promise<
       }),
   );
 }
+
+/** Writes meetings and groups straight into the extension's IndexedDB. */
+export async function seed(
+  sw: Worker,
+  data: { meetings: unknown[]; groups: unknown[] },
+): Promise<void> {
+  await sw.evaluate(
+    (d) =>
+      new Promise<void>((resolveP, reject) => {
+        const req = indexedDB.open('attendly');
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(['meetings', 'groups'], 'readwrite');
+          for (const m of d.meetings) tx.objectStore('meetings').put(m);
+          for (const g of d.groups) tx.objectStore('groups').put(g);
+          tx.oncomplete = () => {
+            db.close();
+            resolveP();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    data,
+  );
+}

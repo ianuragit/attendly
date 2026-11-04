@@ -8,7 +8,7 @@ import pkg from '../package.json' with { type: 'json' };
  *   can read participant names from the Meet page.
  * See README "Permissions explained" for the full justification.
  */
-export default defineManifest({
+export default defineManifest(({ mode }) => ({
   manifest_version: 3,
   name: 'Attendly – Attendance for Meet calls',
   short_name: 'Attendly',
@@ -43,4 +43,14 @@ export default defineManifest({
   ],
   permissions: ['storage'],
   host_permissions: ['https://meet.google.com/*'],
-});
+  // Production pages may not load anything remote: no scripts, images or connections.
+  // (Dev mode is left alone so Vite's HMR websocket keeps working.)
+  ...(mode === 'production'
+    ? {
+        content_security_policy: {
+          extension_pages:
+            "default-src 'self'; script-src 'self'; object-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        },
+      }
+    : {}),
+}));

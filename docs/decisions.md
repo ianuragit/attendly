@@ -62,3 +62,19 @@ A running log of judgement calls made where the brief was ambiguous.
   `chrome.tabs.onRemoved` (no permission needed for the tab id) and stale sweeps run on worker
   start-up.
 - **Badge** is set per tab, so it only shows on the Meet tab that is being tracked.
+
+## Phase 4–5 — Popup and dashboard
+
+- **No remote images:** stored avatar URLs are used only for identity hashing and are never
+  rendered; the UI shows initials. Rendering them would fetch from Google's image CDN and
+  break the "no network calls" promise. Production builds add a strict CSP to extension pages
+  (`default-src 'self'`, `img-src 'self' data:`, `connect-src 'self'`) to enforce this.
+- **Hash routing** (`#/meetings/<id>`, `#/groups/<id>`, `#/settings`) instead of a router
+  library; the popup deep-links into it.
+- **Live refresh:** the worker broadcasts `db:changed` after each save; open dashboard/popup
+  pages reload. Dashboard edits broadcast the same message so other open pages stay in sync.
+- **Popup `?tabId=` parameter** exists only so automated tests can open the popup as a tab.
+- **History search** matches title, code, notes and attendee names. Date filters are inclusive
+  local-calendar days.
+- **Manual marks** are stored per meeting per participant key and override the
+  minimum-duration rule everywhere (detail page, counts, matrix, exports).
