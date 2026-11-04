@@ -105,7 +105,7 @@ same record.
 
 ### Prerequisites
 
-- Node.js 20 or newer, npm
+- Node.js 22.22 or newer (see `.nvmrc`), npm
 - Chrome or Chromium (end-to-end tests use Playwright's Chromium)
 
 ### Scripts

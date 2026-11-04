@@ -150,3 +150,6 @@ regression tests (unit tests unless noted).
 
 Known limitation kept: after a worker-requested restart, up to one heartbeat (15 s) of the call
 between the deletion/closure and the restart is not counted.
+
+- **Node 22 for development/CI:** `jsdom` 30 (used by DOM unit tests) requires Node ≥ 22.22, and
+  GitHub Actions has deprecated Node 20. The extension itself runs in Chrome and is unaffected.
