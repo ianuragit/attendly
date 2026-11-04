@@ -5,7 +5,7 @@
 import { test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { demoData } from '../fixtures/demo-data';
-import { launch, seed } from './harness';
+import { launch, seed, setMeet } from './harness';
 
 const OUT = process.env.SCREENSHOT_DIR ?? resolve(import.meta.dirname, '../../docs/screenshots');
 
@@ -40,5 +40,29 @@ test('dashboard screenshots', async () => {
     await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false });
     await page.setViewportSize({ width: 1280, height: 860 });
   }
+  // Popup over a live (fake) call.
+  await h.sw.evaluate(() => chrome.storage.sync.set({ settings: { pollIntervalMs: 1000 } }));
+  const meet = await h.context.newPage();
+  await meet.goto('https://meet.google.com/phy-sics-one');
+  await setMeet(meet, {
+    tiles: [
+      { name: 'Ms. Rivera', self: true },
+      { name: 'Amara Okoye' },
+      { name: 'Bruno Silva' },
+      { name: 'Chen Wei' },
+      { name: 'Elif Demir' },
+    ],
+    title: 'Physics 101',
+  });
+  await meet.waitForTimeout(2_500);
+  const tabId = await h.sw.evaluate(async () =>
+    Number(Object.keys((await chrome.storage.session.get('live')).live as object)[0]),
+  );
+  const popup = await h.context.newPage();
+  await popup.emulateMedia({ colorScheme: 'light' });
+  await popup.setViewportSize({ width: 320, height: 330 });
+  await popup.goto(`chrome-extension://${h.extensionId}/src/popup/index.html?tabId=${tabId}`);
+  await popup.waitForTimeout(1_200);
+  await popup.screenshot({ path: `${OUT}/popup.png` });
   await h.close();
 });

@@ -114,3 +114,17 @@ A running log of judgement calls made where the brief was ambiguous.
   Restore validates every field, drops unknown keys, clamps sizes, closes any meetings that were
   live at backup time, and drops group references that aren't in the file. "Merge" upserts by id;
   "Replace" clears data first (and restores settings) after a confirmation.
+
+## Phase 8 — Settings, theme, accessibility
+
+- **Settings save immediately** (no Save button) and announce "Settings saved" via a live region.
+  Number fields commit on blur/Enter so partially typed values aren't clamped mid-typing.
+- **Delete all data** requires typing `DELETE`; settings are kept.
+- **Theme** is class-based (`.dark` on `<html>`), resolved from the setting or the OS preference,
+  and applied in both popup and dashboard.
+- **Accessibility is tested automatically:** `tests/e2e/a11y.spec.ts` runs axe-core (WCAG 2.1
+  A/AA) on every page in light and dark mode. Manual checks: everything is reachable by
+  keyboard (native buttons/links/inputs, `<dialog>` for modals), visible focus rings, skip link,
+  `aria-sort` on sortable headers, `aria-expanded` on disclosure buttons, `role="switch"` toggles,
+  text alternatives for the timeline bars and matrix cells, and a polite live region for status
+  messages.

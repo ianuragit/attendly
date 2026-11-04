@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { useApplyTheme, useSettings } from '../ui/hooks';
-import { BackupPanel } from './components/BackupPanel';
 import { DataProvider, useData } from './data';
 import { useExports } from './exports';
 import { GroupDetailPage } from './pages/GroupDetailPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
 import { MeetingsPage } from './pages/MeetingsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { href, useRoute, type Route } from './router';
 
 const NAV: { label: string; route: Route; match: Route['name'][] }[] = [
@@ -57,7 +57,7 @@ function Shell() {
       );
       break;
     case 'settings':
-      page = <BackupPanel settings={settings} />;
+      page = <SettingsPage settings={settings} />;
       break;
   }
 
