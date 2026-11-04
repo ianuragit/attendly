@@ -2,7 +2,8 @@
  * Pure helpers that build and merge MeetingRecords. Kept free of storage so they can be tested.
  */
 import type { LiveMeetingFields } from './messages';
-import type { MeetingRecord, Timestamp } from './types';
+import { participantKey } from './participants';
+import type { MeetingRecord, ParticipantRecord, Timestamp } from './types';
 
 /** A call rejoined within this window continues the previous record instead of starting anew. */
 export const RESUME_WINDOW_MS = 5 * 60_000;
@@ -58,11 +59,32 @@ export function mergeLive(
     ...stored,
     detectedTitle: live.detectedTitle ?? stored.detectedTitle,
     lastSeenAt: Math.max(stored.lastSeenAt, live.lastSeenAt),
-    participants: live.participants,
+    participants: [...live.participants, ...manualOnly(stored, live)],
     paused: live.paused,
     status: end === null ? 'active' : 'ended',
     endedAt: end,
   };
+}
+
+/**
+ * Attendees added by hand in the dashboard (no detected sessions) that the live tracker doesn't
+ * know about. They must survive live saves, which otherwise replace the participant list.
+ */
+function manualOnly(stored: MeetingRecord, live: LiveMeetingFields) {
+  const liveKeys = new Set(live.participants.map((p) => p.key));
+  return stored.participants.filter((p) => p.sessions.length === 0 && !liveKeys.has(p.key));
+}
+
+/** A participant added by hand (e.g. someone who dialled in by phone). */
+export function manualParticipant(
+  name: string,
+  existingKeys: ReadonlySet<string>,
+): ParticipantRecord {
+  const clean = name.replace(/\s+/g, ' ').trim().slice(0, 200);
+  const base = participantKey(clean, null);
+  let key = base;
+  for (let n = 2; existingKeys.has(key); n++) key = `${base}~${n}`;
+  return { key, name: clean, avatarUrl: null, isSelf: false, sessions: [], missingSince: null };
 }
 
 /** Closes an abandoned meeting at its last save; open sessions end there too. */

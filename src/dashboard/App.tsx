@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { useApplyTheme, useSettings } from '../ui/hooks';
 import { DataProvider } from './data';
+import { GroupDetailPage } from './pages/GroupDetailPage';
+import { GroupsPage } from './pages/GroupsPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
 import { MeetingsPage } from './pages/MeetingsPage';
 import { href, useRoute, type Route } from './router';
@@ -23,6 +25,12 @@ export function App() {
       break;
     case 'meeting':
       page = <MeetingDetailPage id={route.id} settings={settings} />;
+      break;
+    case 'groups':
+      page = <GroupsPage />;
+      break;
+    case 'group':
+      page = <GroupDetailPage id={route.id} settings={settings} />;
       break;
     default:
       page = <p className="text-slate-600 dark:text-slate-400">Coming soon.</p>;

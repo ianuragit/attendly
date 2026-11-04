@@ -6,6 +6,7 @@ import {
   summarizeMeeting,
 } from '../../lib/attendance';
 import * as db from '../../lib/db';
+import { manualParticipant } from '../../lib/meetings';
 import { formatDate, formatDateTime, formatDurationShort, formatTime } from '../../lib/time';
 import type { ManualMark, MeetingRecord, Settings } from '../../lib/types';
 import {
@@ -48,6 +49,7 @@ export function MeetingDetailPage({
   const [titleDraft, setTitleDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [newAttendee, setNewAttendee] = useState('');
 
   useEffect(() => {
     if (meeting) document.title = `${meetingTitle(meeting)} · Attendly`;
@@ -101,6 +103,31 @@ export function MeetingDetailPage({
       if (value === 'present' || value === 'absent') manualMarks[key] = value;
       return { ...m, manualMarks };
     }, 'Attendance updated');
+
+  const addAttendee = async (e: FormEvent) => {
+    e.preventDefault();
+    const name = newAttendee.trim();
+    if (!name) return;
+    await update((m) => {
+      const p = manualParticipant(name, new Set(m.participants.map((x) => x.key)));
+      return {
+        ...m,
+        participants: [...m.participants, p],
+        manualMarks: { ...m.manualMarks, [p.key]: 'present' },
+      };
+    }, `${name} added and marked present`);
+    setNewAttendee('');
+  };
+
+  const removeManual = (key: string, name: string) =>
+    update(
+      (m) => ({
+        ...m,
+        participants: m.participants.filter((p) => p.key !== key || p.sessions.length > 0),
+        manualMarks: Object.fromEntries(Object.entries(m.manualMarks).filter(([k]) => k !== key)),
+      }),
+      `${name} removed`,
+    );
 
   const remove = async () => {
     if (!window.confirm(`Delete "${meetingTitle(meeting)}"? This cannot be undone.`)) return;
@@ -331,6 +358,7 @@ export function MeetingDetailPage({
                           <Avatar name={s.name} />
                           <span className="min-w-0 break-words">{s.name}</span>
                           {s.isSelf && <Pill tone="slate">You</Pill>}
+                          {s.sessionCount === 0 && <Pill tone="blue">Added manually</Pill>}
                           {s.presentNow && meeting.status === 'active' && (
                             <Pill tone="green">Here</Pill>
                           )}
@@ -368,17 +396,27 @@ export function MeetingDetailPage({
                         </Select>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          aria-expanded={open}
-                          aria-controls={rowId}
-                          onClick={() => toggle(s.key)}
-                        >
-                          <span aria-hidden="true">{open ? '▾' : '▸'}</span>
-                          Timeline
-                          <span className="sr-only"> for {s.name}</span>
-                        </Button>
+                        {s.sessionCount === 0 ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void removeManual(s.key, s.name)}
+                          >
+                            Remove<span className="sr-only"> {s.name}</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-expanded={open}
+                            aria-controls={rowId}
+                            onClick={() => toggle(s.key)}
+                          >
+                            <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                            Timeline
+                            <span className="sr-only"> for {s.name}</span>
+                          </Button>
+                        )}
                       </td>
                     </tr>
                     {open && p && (
@@ -421,6 +459,26 @@ export function MeetingDetailPage({
           </table>
         </Card>
       )}
+      <form onSubmit={(e) => void addAttendee(e)} className="mt-4 flex flex-wrap items-end gap-2">
+        <div className="w-72">
+          <Field
+            label="Add attendee manually"
+            htmlFor="add-attendee"
+            hint="For someone who joined by phone or wasn't detected."
+          >
+            <TextInput
+              id="add-attendee"
+              maxLength={200}
+              value={newAttendee}
+              placeholder="Full name"
+              onChange={(e) => setNewAttendee(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Button type="submit" disabled={!newAttendee.trim()} className="mb-5">
+          Add as present
+        </Button>
+      </form>
       <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
         “Auto” counts someone present after {formatDurationShort(settings.minPresentMs)} in the call
         {settings.excludeSelf ? '; you are hidden from this list' : ''}. Change this in Settings.

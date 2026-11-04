@@ -16,7 +16,7 @@ const STUDENTS = [
 ];
 
 function rng(seed: number) {
-  let s = seed;
+  let s = (seed * 2654435761) % 2 ** 32;
   return () => {
     s = (s * 1664525 + 1013904223) % 2 ** 32;
     return s / 2 ** 32;
@@ -73,6 +73,10 @@ export function demoData(now: number): { groups: Group[]; meetings: MeetingRecor
         participants.push(person(name, false, [[join, start + len - Math.floor(r() * 4) * MIN]]));
       }
     });
+    // Dana dialled in by phone once and was added by hand.
+    if (i === 1 && !participants.some((x) => x.name === 'Dana Kowalski')) {
+      participants.push(person('Dana Kowalski', false, []));
+    }
     meetings.push({
       id: `demo-phy-${i}`,
       code: 'phy-sics-one',

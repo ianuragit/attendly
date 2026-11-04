@@ -78,3 +78,18 @@ A running log of judgement calls made where the brief was ambiguous.
   local-calendar days.
 - **Manual marks** are stored per meeting per participant key and override the
   minimum-duration rule everywhere (detail page, counts, matrix, exports).
+
+## Phase 6 — Groups and matrix
+
+- **Cross-meeting identity in the matrix** is the normalised name. Avatar hashes are not used
+  across meetings because whether an avatar was visible varies between calls. When a name
+  occurs twice _within one meeting_, those records keep their full key and stay separate rows.
+- **Cells:** ✓ present (meets the minimum or marked present), ~ joined but under the minimum,
+  ✗ absent. Attendance % = present meetings / meetings in the group.
+- **Auto-assign rule:** a group holds a list of meeting codes; the worker assigns new calls with
+  those codes when they start. Creating a group applies the rule to _ungrouped_ past meetings;
+  "Apply code rule to past meetings" on the group page also moves meetings from other groups.
+- **Manual attendees:** the meeting page can add someone who wasn't detected (e.g. dialled in
+  by phone). They are stored as a participant with no sessions plus a "present" mark, and live
+  saves preserve them.
+- **Deleting a group** keeps its meetings (they become ungrouped).

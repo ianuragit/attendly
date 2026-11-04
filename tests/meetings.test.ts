@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   closeStale,
   findResumable,
+  manualParticipant,
   mergeLive,
   newMeeting,
   RESUME_WINDOW_MS,
@@ -129,5 +130,43 @@ describe('closeStale', () => {
     expect(out).toMatchObject({ status: 'ended', endedAt: 50_000 });
     expect(out.participants.map((p) => p.sessions[0]!.leftAt)).toEqual([50_000, 40_000, 2_000]);
     expect(out.participants.every((p) => p.missingSince === null)).toBe(true);
+  });
+});
+
+describe('manual attendees', () => {
+  it('builds a unique key for a manual participant', () => {
+    expect(manualParticipant('  Dana  K ', new Set()).key).toBe('dana k#0');
+    expect(manualParticipant('Dana K', new Set(['dana k#0', 'dana k#0~2'])).key).toBe('dana k#0~3');
+  });
+
+  it('survive live saves that replace the participant list', () => {
+    const manual = manualParticipant('Phone guest', new Set());
+    const stored = {
+      ...base(),
+      participants: [manual],
+      manualMarks: { [manual.key]: 'present' as const },
+    };
+    const live: LiveMeetingFields = {
+      id: 'm1',
+      code: 'abc-defg-hij',
+      detectedTitle: null,
+      startedAt: 1_000,
+      lastSeenAt: 2_000,
+      paused: false,
+      participants: [
+        {
+          key: 'ana#0',
+          name: 'Ana',
+          avatarUrl: null,
+          isSelf: false,
+          missingSince: null,
+          sessions: [{ joinedAt: 1_000, leftAt: null }],
+        },
+      ],
+    };
+    expect(mergeLive(stored, live, null).participants.map((p) => p.name)).toEqual([
+      'Ana',
+      'Phone guest',
+    ]);
   });
 });
