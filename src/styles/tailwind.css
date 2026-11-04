@@ -10,3 +10,14 @@
   --color-brand-600: #2459b8;
   --color-brand-700: #1d4790;
 }
+
+@layer base {
+  body {
+    background-color: var(--color-white);
+    color: var(--color-slate-900);
+  }
+  .dark body {
+    background-color: var(--color-slate-900);
+    color: var(--color-slate-100);
+  }
+}

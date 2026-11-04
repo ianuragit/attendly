@@ -30,7 +30,7 @@ export async function launch(): Promise<Harness> {
   await context.route('https://meet.google.com/**', (route) =>
     route.fulfill({
       contentType: 'text/html',
-      body: '<!doctype html><html><head><title>Meet - fake</title></head><body></body></html>',
+      body: '<!doctype html><html><head><title>Meet</title></head><body></body></html>',
     }),
   );
   return { context, sw, extensionId, close: () => context.close() };

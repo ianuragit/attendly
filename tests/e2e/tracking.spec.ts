@@ -51,6 +51,29 @@ test('records joins, leaves and the end of a call on a Meet-like page', async ()
     .poll(() => h.sw.evaluate((id) => chrome.action.getBadgeText({ tabId: id }), tabId))
     .toBe('3');
 
+  // Popup shows the live call and can pause/resume tracking.
+  const popup = await h.context.newPage();
+  await popup.goto(`chrome-extension://${h.extensionId}/src/popup/index.html?tabId=${tabId}`);
+  await expect(popup.getByText('abc-defg-hij')).toBeVisible();
+  await expect(popup.getByText('Recording attendance')).toBeVisible();
+  const toggle = popup.getByRole('switch', { name: 'Pause tracking' });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect
+    .poll(() => h.sw.evaluate((id) => chrome.action.getBadgeText({ tabId: id }), tabId))
+    .toBe('❚❚');
+  await expect.poll(async () => (await readMeetings(h.sw))[0]?.paused).toBe(true);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(async () => (await readMeetings(h.sw))[0]?.paused).toBe(false);
+  await popup.close();
+  // After resuming, the next scan opens fresh sessions for everyone present.
+  const openSessions = async () =>
+    (await readMeetings(h.sw))[0]?.participants.filter(
+      (p) => p.sessions.length === 2 && p.sessions[1]!.leftAt === null,
+    ).length ?? 0;
+  await expect.poll(openSessions, { timeout: 10_000 }).toBe(3);
+
   // Ben leaves; after the 10s debounce his session is closed.
   await setMeet(page, {
     tiles: [{ name: 'Me', self: true }, { name: 'Ana Lima' }],
@@ -61,7 +84,9 @@ test('records joins, leaves and the end of a call on a Meet-like page', async ()
     .poll(
       async () => {
         const [m] = await readMeetings(h.sw);
-        return m?.participants.find((p) => p.name === 'Ben Okafor')?.sessions[0]?.leftAt ?? null;
+        return (
+          m?.participants.find((p) => p.name === 'Ben Okafor')?.sessions.at(-1)?.leftAt ?? null
+        );
       },
       { timeout: 25_000 },
     )
@@ -74,5 +99,7 @@ test('records joins, leaves and the end of a call on a Meet-like page', async ()
     .toBe('ended');
   const [ended] = await readMeetings(h.sw);
   expect(ended!.participants.every((p) => p.sessions.every((s) => s.leftAt !== null))).toBe(true);
+  // Pause closed everyone's session and resume opened a new one.
+  expect(ended!.participants.find((p) => p.name === 'Ana Lima')!.sessions).toHaveLength(2);
   expect(logs.some((l) => l.includes('Tracking meeting abc-defg-hij'))).toBe(true);
 });

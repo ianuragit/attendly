@@ -16,6 +16,9 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Our effects load data from IndexedDB / chrome.* (external systems) and set state when the
+      // promise resolves, which this rule cannot distinguish from synchronous derived state.
+      'react-hooks/set-state-in-effect': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
