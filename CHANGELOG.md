@@ -33,6 +33,7 @@ First public release.
   minimal permissions (`storage` and `https://meet.google.com/*`), enforced by a CI check.
 - Hardening from a pre-release code audit (XLSX well-formedness, same-name identity, self
   detection, sleep/restart recovery, two-tab calls); see `docs/decisions.md`.
+- Automated GitHub Release workflow publishing a ready-to-install `attendly.zip`.
 - Documentation: README, privacy policy, Meet DOM notes, design decisions, store listing draft.
 
 [1.0.0]: https://github.com/ianuragit/attendly/releases/tag/v1.0.0

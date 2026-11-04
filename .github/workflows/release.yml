@@ -1,0 +1,95 @@
+name: Release
+
+# Publishes a ready-to-install build of the extension as a GitHub Release.
+#
+# Runs on every push to main (and on demand). It releases the version in package.json:
+# - if release vX.Y.Z doesn't exist yet, it is created (tag + release + files);
+# - if it already exists, its files are refreshed.
+# To publish a new version, bump "version" in package.json and add a CHANGELOG entry.
+#
+# Stable download link for the newest release:
+#   https://github.com/<owner>/<repo>/releases/latest/download/attendly.zip
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:dist
+
+      - name: Package
+        id: pkg
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/zip.mjs
+          cp "attendly-v${VERSION}.zip" attendly.zip
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes
+        env:
+          VERSION: ${{ steps.pkg.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "## Install Attendly ${VERSION}"
+            echo
+            echo "1. Download **[attendly.zip](https://github.com/${REPO}/releases/download/v${VERSION}/attendly.zip)** (below, under *Assets*)."
+            echo "2. Unzip it. You get a folder containing \`manifest.json\`."
+            echo "3. Open \`chrome://extensions\` in Chrome and switch on **Developer mode** (top right)."
+            echo "4. Click **Load unpacked** and select the unzipped folder."
+            echo "5. Pin Attendly from the puzzle-piece menu, then join a Google Meet call."
+            echo
+            echo "Keep the folder where it is: Chrome loads the extension from it. To update, download the new zip, replace the folder's contents and click the reload icon on Attendly's card in \`chrome://extensions\`. Your data is kept."
+            echo
+            echo "\`attendly-v${VERSION}.zip\` is the same build with a versioned name, ready to upload to the Chrome Web Store."
+            echo
+            echo "## What's new"
+            awk -v v="$VERSION" '
+              $0 ~ "^## \\[" v "\\]" { found = 1; next }
+              found && /^## \[/ { exit }
+              found && /^\[/ { next }
+              found { print }
+            ' CHANGELOG.md
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG exists; refreshing its files and notes."
+            gh release upload "$TAG" "attendly-v${VERSION}.zip" attendly.zip --clobber
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" "attendly-v${VERSION}.zip" attendly.zip \
+              --target "$GITHUB_SHA" \
+              --title "Attendly ${VERSION}" \
+              --notes-file release-notes.md \
+              --latest
+          fi

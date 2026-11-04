@@ -64,23 +64,48 @@ and are regenerated with `SCREENSHOTS=1 npm run test:e2e -- screenshots`.
 
 ## Install
 
-### From the Chrome Web Store
+> **⬇️ [Download Attendly (attendly.zip)](https://github.com/ianuragit/attendly/releases/latest/download/attendly.zip)**
+> · [All releases](https://github.com/ianuragit/attendly/releases)
+
+### Option 1: Ready-made download (recommended, no tools needed)
+
+Every release is built and tested automatically by GitHub Actions
+([Release workflow](.github/workflows/release.yml)).
+
+1. Download **[attendly.zip](https://github.com/ianuragit/attendly/releases/latest/download/attendly.zip)**.
+2. Unzip it. You get a folder (e.g. `attendly`) that contains `manifest.json`. Move it somewhere
+   permanent, such as your Documents folder: Chrome loads the extension from this folder, so
+   don't delete it.
+3. Open Chrome and go to `chrome://extensions`.
+4. Switch on **Developer mode** (toggle in the top-right corner).
+5. Click **Load unpacked** and select the unzipped folder (the one containing `manifest.json`).
+6. Click the puzzle-piece icon in the toolbar and **pin** Attendly so you can see its badge.
+7. Join a Google Meet call. The badge shows the number of people present. Click the icon for the
+   popup, or **Open dashboard** for history, groups, exports and settings.
+
+**Updating:** download the new `attendly.zip`, replace the folder's contents with it, then click
+the ↻ reload icon on Attendly's card in `chrome://extensions`. Your meetings and settings are
+kept.
+
+**Testing a build that isn't released yet:** open the
+[CI runs](https://github.com/ianuragit/attendly/actions/workflows/ci.yml), pick a green run, and
+download the **attendly-extension-unpacked** artifact from the run's summary page (you must be
+signed in to GitHub). Unzip it and follow steps 3–6 above.
+
+### Option 2: From the Chrome Web Store
 
 _Coming soon_: `https://chromewebstore.google.com/detail/attendly/<extension-id>`
 
-### Manual install ("Load unpacked")
+### Option 3: Build from source
 
-1. Download or clone this repository (or download a release zip and unzip it).
-2. Build it:
+1. Clone this repository.
+2. Build it (requires Node.js 22.22+):
    ```bash
    npm install && npm run build
    ```
-3. Open `chrome://extensions` and switch on **Developer mode** (top right).
-4. Click **Load unpacked** and select the `dist` folder.
-5. Pin Attendly from the puzzle-piece (Extensions) menu so the badge is visible.
-
-If you downloaded a release zip that already contains the built extension, skip step 2 and
-select the unzipped folder in step 4.
+3. Open `chrome://extensions`, switch on **Developer mode**, click **Load unpacked** and select
+   the `dist` folder.
+4. Pin Attendly from the puzzle-piece (Extensions) menu so the badge is visible.
 
 ## How to use
 
@@ -220,8 +245,11 @@ participants that attendance is being recorded where appropriate.
 7. **Distribution.** Choose visibility (public/unlisted/private) and regions.
 8. **Submit for review.** Reviews usually take a few days. Narrow host permissions and no
    remote code help. If it's rejected, the email names the policy; fix it and resubmit.
-9. **Tag the release** (`git tag vX.Y.Z && git push --tags`) and attach the zip to a GitHub
-   release.
+9. **GitHub release:** merging to `main` runs the [Release workflow](.github/workflows/release.yml),
+   which tests and builds the extension and publishes release `vX.Y.Z` (tag included) with
+   `attendly.zip` and `attendly-vX.Y.Z.zip` attached. You can also run it by hand from the
+   _Actions_ tab (_Release → Run workflow_). The Web Store upload can use the same
+   `attendly-vX.Y.Z.zip`.
 
 ## Roadmap
 

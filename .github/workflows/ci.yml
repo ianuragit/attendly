@@ -27,8 +27,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: node scripts/zip.mjs
+      # Download from the run's summary page; unzip and "Load unpacked" the folder.
       - uses: actions/upload-artifact@v4
         with:
-          name: attendly-extension
+          name: attendly-extension-unpacked
+          path: dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attendly-web-store-zip
           path: attendly-v*.zip
           if-no-files-found: error
