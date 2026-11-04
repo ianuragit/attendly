@@ -5,6 +5,7 @@ import {
   keyAvatar,
   keyName,
   mergeSources,
+  resolveSelf,
   normalizeAvatarUrl,
   normalizeName,
   participantKey,
@@ -15,7 +16,8 @@ describe('cleanName', () => {
     ['Ana Lima', 'Ana Lima', false],
     ['Ana Lima (You)', 'Ana Lima', true],
     ['Ana Lima (you)', 'Ana Lima', true],
-    ['Ana Lima You', 'Ana Lima', true],
+    ['Ana Lima You', 'Ana Lima You', false],
+    ['Jae-suk You', 'Jae-suk You', false],
     ['Ana Lima (Presenting)', 'Ana Lima', false],
     ['Ana Lima Presenting', 'Ana Lima', false],
     ['Ana Lima (You) (Presenting)', 'Ana Lima', true],
@@ -105,5 +107,20 @@ describe('mergeSources', () => {
       [e('Ana'), e('Ben')],
     ]);
     expect(out.map((o) => o.name)).toEqual(['Ben', 'Ana']);
+  });
+});
+
+describe('resolveSelf', () => {
+  const e = (name: string, isSelf: boolean) => ({ name, avatarUrl: null, isSelf });
+  it('keeps a single self', () => {
+    expect(resolveSelf([e('Me', true), e('Ana', false)])).toEqual({
+      entries: [e('Me', true), e('Ana', false)],
+      ambiguous: false,
+    });
+  });
+  it('drops the self flag when several entries claim it', () => {
+    const out = resolveSelf([e('Me', true), e('Kim', true)]);
+    expect(out.ambiguous).toBe(true);
+    expect(out.entries.every((x) => !x.isSelf)).toBe(true);
   });
 });

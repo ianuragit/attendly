@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   attendeeCount,
+  markFor,
   meetingDurationMs,
   meetingTitle,
   summarizeMeeting,
@@ -159,5 +160,13 @@ describe('meeting summaries', () => {
     expect(meetingTitle({ ...m, detectedTitle: 'Standup', customTitle: ' Math 101 ' })).toBe(
       'Math 101',
     );
+  });
+});
+
+describe('markFor', () => {
+  it('only reads own properties', () => {
+    expect(markFor({ manualMarks: {} }, 'constructor')).toBeNull();
+    expect(markFor({ manualMarks: {} }, 'toString')).toBeNull();
+    expect(markFor({ manualMarks: { 'a#0': 'absent' } }, 'a#0')).toBe('absent');
   });
 });

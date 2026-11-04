@@ -79,6 +79,19 @@ export function summarizeParticipant(
   };
 }
 
+/**
+ * Manual mark for a participant. Uses an own-property check so keys such as "constructor" or
+ * "toString" (possible in imported data) don't resolve to Object.prototype members.
+ */
+export function markFor(
+  meeting: Pick<MeetingRecord, 'manualMarks'>,
+  key: string,
+): ManualMark | null {
+  if (!Object.hasOwn(meeting.manualMarks, key)) return null;
+  const mark = meeting.manualMarks[key];
+  return mark === 'present' || mark === 'absent' ? mark : null;
+}
+
 /** The time "now" means for a meeting: its end if ended, otherwise the given clock. */
 export function meetingNow(meeting: MeetingRecord, clock: Timestamp): Timestamp {
   return meeting.endedAt ?? Math.max(clock, meeting.lastSeenAt);
@@ -97,9 +110,7 @@ export function summarizeMeeting(
   const now = meetingNow(meeting, clock);
   return meeting.participants
     .filter((p) => !(settings.excludeSelf && p.isSelf))
-    .map((p) =>
-      summarizeParticipant(p, now, settings.minPresentMs, meeting.manualMarks[p.key] ?? null),
-    )
+    .map((p) => summarizeParticipant(p, now, settings.minPresentMs, markFor(meeting, p.key)))
     .sort(
       (a, b) =>
         (a.firstJoin ?? Infinity) - (b.firstJoin ?? Infinity) || a.name.localeCompare(b.name),

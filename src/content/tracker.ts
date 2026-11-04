@@ -112,7 +112,14 @@ export function applySnapshot(
   for (const [k, p] of Object.entries(prev.participants)) records[k] = cloneRecord(p);
 
   const claimed = new Set<string>();
-  for (const entry of snapshot) {
+  // Resolve entries that carry an avatar first: they can only match their own record. An
+  // avatar-less entry matches any same-name record, so letting it go first could steal the
+  // record of a same-name person whose avatar *is* visible in this snapshot.
+  const ordered = [
+    ...snapshot.filter((e) => normalizeAvatarUrl(e.avatarUrl) !== null),
+    ...snapshot.filter((e) => normalizeAvatarUrl(e.avatarUrl) === null),
+  ];
+  for (const entry of ordered) {
     const name = entry.name.trim();
     if (!name) continue;
     let record = resolveRecord(entry, records, claimed);

@@ -90,6 +90,24 @@ describe('backup', () => {
     expect(() => parseBackup(text)).toThrow(BackupError);
   });
 
+  it('rejects duplicate or malformed participant keys and drops orphan marks (audit #9)', () => {
+    const dupe = { ...meeting, participants: [meeting.participants[0], meeting.participants[0]] };
+    expect(() => roundTrip(createBackup([dupe as never], [], DEFAULT_SETTINGS, 0))).toThrow(
+      BackupError,
+    );
+    const proto = {
+      ...meeting,
+      participants: [{ ...meeting.participants[0], key: 'constructor' }],
+    };
+    expect(() => roundTrip(createBackup([proto as never], [], DEFAULT_SETTINGS, 0))).toThrow(
+      BackupError,
+    );
+    const orphan = { ...meeting, manualMarks: { 'a#0': 'present', 'ghost#0': 'present' } };
+    expect(
+      roundTrip(createBackup([orphan as never], [], DEFAULT_SETTINGS, 0)).meetings[0]!.manualMarks,
+    ).toEqual({ 'a#0': 'present' });
+  });
+
   it('ignores prototype-pollution keys', () => {
     const text =
       '{"app":"attendly","version":1,"groups":[],"meetings":[],"__proto__":{"polluted":true}}';

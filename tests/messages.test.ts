@@ -25,7 +25,13 @@ const meeting = {
 describe('isMessage', () => {
   it('accepts well-formed messages', () => {
     expect(
-      isMessage({ type: 'meeting:start', code: 'abc-defg-hij', detectedTitle: null, at: 1 }),
+      isMessage({
+        type: 'meeting:start',
+        code: 'abc-defg-hij',
+        detectedTitle: null,
+        at: 1,
+        resumeId: null,
+      }),
     ).toBe(true);
     expect(isMessage({ type: 'meeting:save', meeting })).toBe(true);
     expect(isMessage({ type: 'meeting:end', meeting, endedAt: 3 })).toBe(true);
@@ -60,6 +66,29 @@ describe('isMessage', () => {
       }),
     ).toBe(false);
     expect(isMessage({ type: 'live:get', tabId: '4' })).toBe(false);
+    expect(
+      isMessage({ type: 'meeting:start', code: 'abc-defg-hij', detectedTitle: null, at: 1 }),
+    ).toBe(false);
+    // Keys must have the participant-key shape and be unique (audit #9).
+    const bad = (key: string) => ({ ...meeting.participants[0], key });
+    expect(
+      isMessage({
+        type: 'meeting:save',
+        meeting: { ...meeting, participants: [bad('constructor')] },
+      }),
+    ).toBe(false);
+    expect(
+      isMessage({
+        type: 'meeting:save',
+        meeting: { ...meeting, participants: [bad('a#0'), bad('a#0')] },
+      }),
+    ).toBe(false);
+    expect(
+      isMessage({
+        type: 'meeting:save',
+        meeting: { ...meeting, participants: [bad('a#0~2'), bad('b#1f2e3d4c')] },
+      }),
+    ).toBe(true);
   });
 });
 

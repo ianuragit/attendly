@@ -2,10 +2,16 @@
  * Pure attendance matrix for a group: rows = people, columns = meetings.
  *
  * Cross-meeting identity: people are matched by normalised name. If the same name appears more
- * than once *within one meeting* (two different people), those records keep their full key so
- * they stay separate rows.
+ * than once *within one meeting*, the longest-present record joins the name's row and the
+ * others become separate rows keyed by their full participant key.
  */
-import { meetingNow, meetingTitle, summarizeParticipant } from './attendance';
+import {
+  markFor,
+  meetingNow,
+  meetingTitle,
+  summarizeParticipant,
+  totalPresentMs,
+} from './attendance';
 import { keyName } from './participants';
 import type { ManualMark, MeetingRecord, Settings } from './types';
 
@@ -41,12 +47,6 @@ export interface AttendanceMatrix {
   rows: MatrixRow[];
 }
 
-/** Identity of a participant across meetings (see module comment). */
-export function personId(key: string, duplicateNames: ReadonlySet<string>): string {
-  const name = keyName(key);
-  return duplicateNames.has(name) ? key : name;
-}
-
 export function buildMatrix(
   meetings: readonly MeetingRecord[],
   settings: Pick<Settings, 'excludeSelf' | 'minPresentMs'>,
@@ -57,15 +57,21 @@ export function buildMatrix(
 
   sorted.forEach((m, col) => {
     const now = meetingNow(m, clock);
-    const counts = new Map<string, number>();
-    for (const p of m.participants)
-      counts.set(keyName(p.key), (counts.get(keyName(p.key)) ?? 0) + 1);
-    const dupes = new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name));
+    // When a name occurs more than once in this meeting, the longest-present record keeps the
+    // shared name row (so a regular attendee's history isn't broken by a namesake); the others
+    // get their own rows keyed by their full participant key.
+    const primary = new Map<string, { key: string; ms: number }>();
+    for (const p of m.participants) {
+      const name = keyName(p.key);
+      const ms = totalPresentMs(p.sessions, now);
+      const cur = primary.get(name);
+      if (!cur || ms > cur.ms) primary.set(name, { key: p.key, ms });
+    }
 
     for (const p of m.participants) {
       if (settings.excludeSelf && p.isSelf) continue;
-      const id = personId(p.key, dupes);
-      const s = summarizeParticipant(p, now, settings.minPresentMs, m.manualMarks[p.key] ?? null);
+      const id = primary.get(keyName(p.key))?.key === p.key ? keyName(p.key) : p.key;
+      const s = summarizeParticipant(p, now, settings.minPresentMs, markFor(m, p.key));
       let row = people.get(id);
       if (!row) {
         row = { name: p.name, isSelf: p.isSelf, cells: sorted.map(() => null) };

@@ -9,7 +9,14 @@ export type Route =
   | { name: 'settings' };
 
 export function parseHash(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  const decode = (part: string): string => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part; // malformed escape such as "%E0": use it verbatim rather than crash
+    }
+  };
+  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decode);
   const [section, id] = parts;
   if (section === 'meetings' && id) return { name: 'meeting', id };
   if (section === 'groups' && id) return { name: 'group', id };

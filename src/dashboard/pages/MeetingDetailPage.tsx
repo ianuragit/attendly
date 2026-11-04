@@ -130,7 +130,11 @@ export function MeetingDetailPage({
     );
 
   const remove = async () => {
-    if (!window.confirm(`Delete "${meetingTitle(meeting)}"? This cannot be undone.`)) return;
+    const live =
+      meeting.status === 'active'
+        ? ' The call is still in progress, so Attendly will start a new record for the rest of it.'
+        : '';
+    if (!window.confirm(`Delete "${meetingTitle(meeting)}"? This cannot be undone.${live}`)) return;
     await db.deleteMeeting(meeting.id);
     notifyDataChanged();
     await reload();

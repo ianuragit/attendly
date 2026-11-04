@@ -74,8 +74,11 @@ function parseMeeting(v: unknown, i: number, groupIds: ReadonlySet<string>): Mee
   if (!Array.isArray(v.participants) || v.participants.length > 5_000) {
     throw new BackupError(`${where} has invalid participants`);
   }
+  const seenKeys = new Set<string>();
   const participants = v.participants.map((p, j) => {
     if (!isParticipant(p)) throw new BackupError(`${where}, participant ${j + 1} is invalid`);
+    if (seenKeys.has(p.key)) throw new BackupError(`${where} has a duplicate participant`);
+    seenKeys.add(p.key);
     return {
       key: p.key,
       name: p.name,
@@ -91,7 +94,8 @@ function parseMeeting(v: unknown, i: number, groupIds: ReadonlySet<string>): Mee
   const marks: Record<string, ManualMark> = {};
   if (isObj(v.manualMarks)) {
     for (const [k, m] of Object.entries(v.manualMarks)) {
-      if ((m === 'present' || m === 'absent') && k.length <= 1_200) marks[k] = m;
+      // Only keep marks for participants that exist in this meeting.
+      if ((m === 'present' || m === 'absent') && seenKeys.has(k)) marks[k] = m;
     }
   }
   const groupId = nullableStr(v.groupId, `${where} groupId`, 100);

@@ -324,3 +324,18 @@ describe('tracker: incomplete snapshots', () => {
     expect(one(st, 'Ben').sessions[0]!.leftAt).toBe(T0 + 10 * S);
   });
 });
+
+describe('tracker: audit regressions', () => {
+  it('an avatar-less entry listed first does not steal a same-name record (audit #2)', () => {
+    const a = 'https://lh3.googleusercontent.com/a/one';
+    const b = 'https://lh3.googleusercontent.com/a/two';
+    let st = run([[0, [p('Sam', { avatarUrl: a }), p('Sam', { avatarUrl: b })]]]);
+    // B's tile loses its avatar and is now first in DOM order.
+    for (const t of [5, 10, 20, 30]) {
+      st = applySnapshot(st, [p('Sam'), p('Sam', { avatarUrl: a })], T0 + t * S, OPTS);
+    }
+    const sams = byName(st, 'Sam');
+    expect(sams).toHaveLength(2);
+    expect(sams.every((r) => r.sessions.length === 1 && r.sessions[0]!.leftAt === null)).toBe(true);
+  });
+});

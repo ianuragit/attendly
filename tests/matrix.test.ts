@@ -81,11 +81,36 @@ describe('buildMatrix', () => {
 
   it('keeps same-name people in one meeting apart', () => {
     const mx = buildMatrix(
-      [meeting('m', 0, [p('Sam', 30, { key: 'sam#aaaa' }), p('Sam', 30, { key: 'sam#bbbb' })])],
+      [meeting('m', 0, [p('Sam', 30, { key: 'sam#aaaa' }), p('Sam', 20, { key: 'sam#bbbb' })])],
       S,
       0,
     );
     expect(mx.rows).toHaveLength(2);
+  });
+
+  it('keeps a regular attendee on one row when a namesake joins once (audit #6)', () => {
+    const mx = buildMatrix(
+      [
+        meeting('a', 0, [p('Sam', 50, { key: 'sam#11111111' })]),
+        meeting('b', 1, [
+          p('Sam', 50, { key: 'sam#11111111' }),
+          p('Sam', 3, { key: 'sam#22222222' }),
+        ]),
+        meeting('c', 2, [p('Sam', 50, { key: 'sam#11111111' })]),
+      ],
+      S,
+      0,
+    );
+    const main = mx.rows.find((r) => r.id === 'sam')!;
+    expect(main.cells.map((c) => c.present)).toEqual([true, true, true]);
+    expect(main.attendancePct).toBe(100);
+    expect(mx.rows).toHaveLength(2);
+  });
+
+  it('ignores manual marks whose keys collide with Object.prototype (audit #9)', () => {
+    const m = meeting('m', 0, [p('Ana', 30)]);
+    const mx = buildMatrix([{ ...m, manualMarks: {} }], S, 0);
+    expect(mx.rows[0]!.cells[0]!.manualMark).toBeNull();
   });
 
   it('handles empty groups', () => {

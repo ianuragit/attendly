@@ -3,8 +3,8 @@
  * incremental saves to the service worker. All DOM reading goes through selectors.ts.
  */
 import { log } from '../lib/log';
-import type { LiveMeetingFields, Message, StartReply } from '../lib/messages';
-import { mergeSources } from '../lib/participants';
+import type { LiveMeetingFields, Message, SaveReply, StartReply } from '../lib/messages';
+import { mergeSources, resolveSelf } from '../lib/participants';
 import { getSettings, onSettingsChanged } from '../lib/settings';
 import type { Settings, SnapshotEntry, TrackerState } from '../lib/types';
 import {
@@ -26,6 +26,14 @@ const END_GRACE_MS = 15_000;
 const MIN_SCAN_GAP_MS = 1_000;
 /** Send a heartbeat save at least this often even when nothing changed. */
 const HEARTBEAT_MS = 15_000;
+/**
+ * If scans stop for this long (computer asleep, tab frozen), nobody was being observed: close
+ * everyone's session at the last scan instead of crediting the gap. Above Chrome's 1-minute
+ * background-timer throttling so a throttled tab doesn't produce bogus leave/rejoin pairs.
+ */
+const GAP_MS = 150_000;
+/** A tab that found the call already tracked in another tab re-checks this often. */
+const SECONDARY_RETRY_MS = 30_000;
 
 interface ActiveCall {
   id: string;
@@ -50,6 +58,11 @@ export class MeetController {
   private observer: MutationObserver | null = null;
   private lastScanAt = 0;
   private scanQueued = false;
+  private stopped = false;
+  /** Meeting to resume after the worker asked us to restart. */
+  private resumeId: string | null = null;
+  /** While another tab tracks this call, don't ask to start again before this time. */
+  private passiveUntil = 0;
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -88,7 +101,23 @@ export class MeetController {
     this.queueScan();
   }
 
+  /**
+   * The extension was reloaded or updated: this script is orphaned and can no longer reach the
+   * worker. Stop observing so it doesn't spin forever; the new version takes over on reload.
+   */
+  private orphaned(): boolean {
+    if (this.stopped) return true;
+    if (chrome.runtime?.id) return false;
+    this.stopped = true;
+    this.observer?.disconnect();
+    if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.call = null;
+    log.warn('Attendly was reloaded or updated. Reload this Meet tab to resume tracking.');
+    return true;
+  }
+
   private schedulePoll(): void {
+    if (this.stopped) return;
     if (this.pollTimer) clearTimeout(this.pollTimer);
     const interval = this.settings?.pollIntervalMs ?? 5_000;
     this.pollTimer = setTimeout(() => {
@@ -118,6 +147,7 @@ export class MeetController {
   }
 
   async scan(): Promise<void> {
+    if (this.orphaned()) return;
     this.lastScanAt = this.now();
     const settings = this.settings;
     if (!settings) return;
@@ -137,6 +167,7 @@ export class MeetController {
 
     if (!settings.autoTrack || !inCall || !code) return;
     if (!this.call) {
+      if (now < this.passiveUntil) return;
       await this.beginCall(code, now);
       if (!this.call) return;
     }
@@ -159,6 +190,13 @@ export class MeetController {
       }
       // An empty read is almost certainly a detection failure (you are always in your own
       // call), so don't let it mark everyone as having left.
+      const lastTick = call.tracker.lastTickAt;
+      if (lastTick !== null && now - lastTick > GAP_MS) {
+        log.info(
+          `No scans for ${Math.round((now - lastTick) / 1000)}s; closing sessions at the last scan.`,
+        );
+        call.tracker = finalizeTracker(call.tracker, lastTick);
+      }
       if (entries.length > 0) {
         call.tracker = applySnapshot(call.tracker, entries, now, {
           leaveDebounceMs: 10_000,
@@ -194,7 +232,12 @@ export class MeetController {
     }
 
     const sources = panel ? [panel, tiles.entries] : [tiles.entries];
-    const entries = mergeSources(sources);
+    const { entries, ambiguous } = resolveSelf(mergeSources(sources));
+    if (ambiguous)
+      warnOnce(
+        'multi-self',
+        'More than one participant looked like you; ignoring the self marker.',
+      );
     // Complete when the panel is open (it lists everyone) or when the tiles cover the count.
     const complete =
       (panel !== null && findPeopleList() !== null) ||
@@ -212,11 +255,21 @@ export class MeetController {
         code,
         detectedTitle,
         at: now,
+        resumeId: this.resumeId,
       } satisfies Message)) as StartReply | undefined;
+      if (reply?.meetingId === null && reply.reason === 'secondary-tab') {
+        this.passiveUntil = now + SECONDARY_RETRY_MS;
+        warnOnce(
+          'secondary-tab',
+          'This call is already being tracked in another tab; this tab stays passive.',
+        );
+        return;
+      }
       if (!reply?.meetingId) {
         warnOnce('start-failed', 'Service worker did not acknowledge the meeting start.');
         return;
       }
+      this.resumeId = null;
       const tracker = createTrackerState();
       for (const p of reply.participants) tracker.participants[p.key] = p;
       this.call = {
@@ -234,7 +287,7 @@ export class MeetController {
       };
       log.info(`Tracking meeting ${code}`);
     } catch (err) {
-      log.error('Failed to start tracking', err);
+      if (!this.orphaned()) log.error('Failed to start tracking', err);
     } finally {
       this.starting = false;
     }
@@ -262,10 +315,18 @@ export class MeetController {
     call.lastSavedJson = json;
     call.lastSavedAt = now;
     try {
-      await chrome.runtime.sendMessage({ type: 'meeting:save', meeting } satisfies Message);
+      const reply = (await chrome.runtime.sendMessage({
+        type: 'meeting:save',
+        meeting,
+      } satisfies Message)) as SaveReply | null | undefined;
+      if (reply && !reply.ok && reply.restart && this.call === call) {
+        // The stored meeting was closed or deleted; start again (resuming it if it still exists).
+        log.info('Meeting was closed or removed elsewhere; restarting tracking.');
+        this.resumeId = call.id;
+        this.call = null;
+      }
     } catch (err) {
-      // The extension may have been reloaded/updated; the old content script is orphaned.
-      log.warn('Could not save meeting (extension reloaded?)', err);
+      if (!this.orphaned()) log.warn('Could not save meeting', err);
     }
   }
 
@@ -279,7 +340,7 @@ export class MeetController {
       await chrome.runtime.sendMessage({ type: 'meeting:end', meeting, endedAt } satisfies Message);
       log.info(`Meeting ${call.code} ended`);
     } catch (err) {
-      log.warn('Could not finalise meeting', err);
+      if (!this.orphaned()) log.warn('Could not finalise meeting', err);
     }
   }
 

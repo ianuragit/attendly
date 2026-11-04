@@ -133,3 +133,33 @@ describe('readMeetingTitle', () => {
     expect(readMeetingTitle(document, 'Google Meet')).toBeNull();
   });
 });
+
+describe('audit regressions', () => {
+  it('does not treat a guest who typed "(You)" into their name as self (audit #3)', () => {
+    set(
+      '<div role="list" aria-label="Participants">' +
+        '<div role="listitem" aria-label="Kim (You)"><span class="notranslate">Kim (You)</span></div>' +
+        '<div role="listitem" aria-label="Lee (me)"><span class="notranslate">Lee (me)</span></div>' +
+        '<div role="listitem" aria-label="Me"><span class="notranslate">Me</span><span>(You)</span></div>' +
+        '</div>',
+    );
+    expect(readPeoplePanel()).toEqual([
+      { name: 'Kim', avatarUrl: null, isSelf: false },
+      { name: 'Lee', avatarUrl: null, isSelf: false },
+      { name: 'Me', avatarUrl: null, isSelf: true },
+    ]);
+  });
+
+  it('a "(You)" in a tile name does not make it self; only data-self-name does', () => {
+    set('<div data-participant-id="1"><span class="notranslate">Kim (You)</span></div>');
+    expect(readTiles().entries).toEqual([{ name: 'Kim', avatarUrl: null, isSelf: false }]);
+  });
+
+  it('prefers the Google profile image over an earlier unrelated https image (audit #8)', () => {
+    set(
+      '<div data-participant-id="1"><img src="https://example.test/reaction.png">' +
+        '<img src="https://lh3.googleusercontent.com/a/ana"><span class="notranslate">Ana</span></div>',
+    );
+    expect(readTiles().entries[0]!.avatarUrl).toBe('https://lh3.googleusercontent.com/a/ana');
+  });
+});

@@ -14,6 +14,9 @@ describe('router', () => {
   ])('%s', (hash, route) => {
     expect(parseHash(hash)).toEqual(route);
   });
+  it('does not throw on malformed escapes (audit #11)', () => {
+    expect(parseHash('#/meetings/%E0')).toEqual({ name: 'meeting', id: '%E0' });
+  });
   it('round-trips', () => {
     expect(parseHash(href({ name: 'group', id: 'a/b' }))).toEqual({ name: 'group', id: 'a/b' });
   });

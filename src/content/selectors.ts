@@ -52,7 +52,7 @@ export const SELECTORS = {
   peopleButtonPanelId: 'button[data-panel-id="1"]',
 
   /** Avatar image within a tile or a People-panel row. */
-  avatarImg: 'img[src^="https://lh3.googleusercontent.com/"], img[src^="https://"]',
+  avatarImg: ['img[src^="https://lh3.googleusercontent.com/"]', 'img[src^="https://"]'],
 
   /** Meeting title, when Meet exposes it (scheduled/calendar meetings). */
   meetingTitleAttr: '[data-meeting-title]',
@@ -139,19 +139,41 @@ export function readMeetingTitle(
 // ------------------------------------------------------------------------------- participants
 
 function avatarOf(el: Element): string | null {
-  const img = el.querySelector<HTMLImageElement>(SELECTORS.avatarImg);
-  return img?.src || null;
+  // Try each selector in priority order (a combined selector list would return the first
+  // match in DOM order, letting an unrelated https image win over the profile picture).
+  for (const selector of SELECTORS.avatarImg) {
+    const img = el.querySelector<HTMLImageElement>(selector);
+    if (img?.src) return img.src;
+  }
+  return null;
 }
 
+/**
+ * Builds a snapshot entry. `isSelf` comes only from structural signals found by the caller
+ * (data-self-name, a separate "(You)" element); a "(You)" typed into a display name is stripped
+ * but ignored, otherwise any guest could hide themselves from "exclude self" lists.
+ */
 function entryFromLabel(
   rawName: string,
   avatarUrl: string | null,
-  selfHint: boolean,
+  isSelf: boolean,
 ): SnapshotEntry | null {
   const cleaned = cleanName(rawName);
   if (!cleaned.name || cleaned.presentation) return null;
   if (NOT_A_PERSON.some((re) => re.test(cleaned.name))) return null;
-  return { name: cleaned.name.slice(0, 200), avatarUrl, isSelf: selfHint || cleaned.selfMarker };
+  return { name: cleaned.name.slice(0, 200), avatarUrl, isSelf };
+}
+
+/** A People-panel row marks the local user with a separate "(You)" element next to the name. */
+function rowHasSelfBadge(row: Element, nameEl: Element | null): boolean {
+  if (row.querySelector(SELECTORS.selfNameAttr)) return true;
+  return Array.from(row.querySelectorAll('span, div')).some(
+    (el) =>
+      el !== nameEl &&
+      !el.contains(nameEl) &&
+      el.children.length === 0 &&
+      /^[(（]\s*you\s*[)）]$/i.test(text(el)),
+  );
 }
 
 export interface TileScan {
@@ -205,10 +227,7 @@ export function readPeoplePanel(root: ParentNode = document): SnapshotEntry[] | 
     if (row.querySelector(SELECTORS.peopleListItem)) return;
     const nameEl = row.querySelector(SELECTORS.peopleRowName);
     const raw = row.getAttribute('aria-label') || text(nameEl);
-    const rowText = text(row);
-    const selfHint =
-      /\((you|me)\)/i.test(rowText) || row.querySelector(SELECTORS.selfNameAttr) !== null;
-    const entry = entryFromLabel(raw, avatarOf(row), selfHint);
+    const entry = entryFromLabel(raw, avatarOf(row), rowHasSelfBadge(row, nameEl));
     if (entry) entries.push(entry);
   });
   return entries;

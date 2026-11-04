@@ -9,7 +9,13 @@
 import * as db from '../lib/db';
 import { log } from '../lib/log';
 import { closeStale, findResumable, mergeLive, newMeeting, STALE_AFTER_MS } from '../lib/meetings';
-import { isMessage, type LiveMeetingFields, type Message, type StartReply } from '../lib/messages';
+import {
+  isMessage,
+  type LiveMeetingFields,
+  type Message,
+  type SaveReply,
+  type StartReply,
+} from '../lib/messages';
 import { getSettings } from '../lib/settings';
 import type { LiveStatus, MeetingRecord } from '../lib/types';
 
@@ -70,23 +76,39 @@ async function liveCount(m: LiveMeetingFields): Promise<number> {
 
 // ---------------------------------------------------------------------------------- handlers
 
+/** Serialises meeting starts so two tabs can't both resume or create the same meeting. */
+let startQueue: Promise<unknown> = Promise.resolve();
+function queued<T>(fn: () => Promise<T>): Promise<T> {
+  const next = startQueue.then(fn);
+  startQueue = next.catch(() => undefined);
+  return next;
+}
+
 async function handleStart(
   tabId: number,
   code: string,
   detectedTitle: string | null,
   at: number,
+  resumeId: string | null,
 ): Promise<StartReply> {
-  const sameCode = await db.listMeetingsByCode(code);
   const live = await getLiveMap();
-  const liveIds = new Set(
-    Object.entries(live)
-      .filter(([t]) => Number(t) !== tabId)
-      .map(([, s]) => s.meetingId),
-  );
-  const resumable = findResumable(
-    sameCode.filter((m) => !liveIds.has(m.id)),
-    at,
-  );
+  const otherTabs = Object.entries(live).filter(([t]) => Number(t) !== tabId);
+
+  // Another tab is already tracking this call (e.g. the same meeting open twice): stay
+  // passive so the call isn't recorded as two meetings with competing participant lists.
+  if (otherTabs.some(([, s]) => s.code === code && at - s.updatedAt < STALE_AFTER_MS)) {
+    return { meetingId: null, reason: 'secondary-tab' };
+  }
+
+  const liveIds = new Set(otherTabs.map(([, s]) => s.meetingId));
+  const previous = resumeId ? await db.getMeeting(resumeId) : undefined;
+  const resumable =
+    previous && previous.code === code && !liveIds.has(previous.id)
+      ? previous // this tab's own meeting, closed while it was asleep/restarting
+      : findResumable(
+          (await db.listMeetingsByCode(code)).filter((m) => !liveIds.has(m.id)),
+          at,
+        );
 
   let meeting: MeetingRecord;
   if (resumable) {
@@ -121,15 +143,28 @@ async function handleSave(
   tabId: number,
   live: LiveMeetingFields,
   endedAt: number | null,
-): Promise<void> {
+): Promise<SaveReply> {
+  let rejected = false;
   const stored = await db.updateMeeting(live.id, (m) => {
-    if (m.code !== live.code) return null; // never let a tab overwrite another meeting
+    // Never let a tab overwrite another meeting, and never reopen a meeting that was closed
+    // (abandoned after sleep, tab-close race): its open sessions would be credited with the
+    // time nobody was watching. The tab restarts and resumes it properly instead.
+    if (m.code !== live.code || m.status === 'ended') {
+      rejected = true;
+      return null;
+    }
     return mergeLive(m, live, endedAt);
   });
-  if (!stored) {
-    log.warn('Save for unknown meeting ignored', live.id);
-    return;
+
+  if (!stored || rejected) {
+    if (!stored) log.warn('Save for unknown meeting; asking the tab to restart', live.id);
+    await updateLiveMap((map) =>
+      map[tabId]?.meetingId === live.id ? withoutTab(map, tabId) : map,
+    );
+    await setBadge(tabId, null);
+    return { ok: false, restart: true };
   }
+
   if (endedAt === null) {
     const status: LiveStatus = {
       meetingId: live.id,
@@ -148,6 +183,7 @@ async function handleSave(
     await setBadge(tabId, null);
   }
   notifyPages();
+  return { ok: true };
 }
 
 /** Tab closed or crashed: finalise its meeting from the last save. */
@@ -190,17 +226,18 @@ const isExtensionPage = (sender: chrome.runtime.MessageSender): boolean =>
 
 async function route(msg: Message, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (msg.type) {
-    case 'meeting:start':
-      if (!isMeetSender(sender) || sender.tab?.id === undefined) return null;
-      return handleStart(sender.tab.id, msg.code.toLowerCase(), msg.detectedTitle, msg.at);
+    case 'meeting:start': {
+      const tabId = sender.tab?.id;
+      if (!isMeetSender(sender) || tabId === undefined) return null;
+      const code = msg.code.toLowerCase();
+      return queued(() => handleStart(tabId, code, msg.detectedTitle, msg.at, msg.resumeId));
+    }
     case 'meeting:save':
       if (!isMeetSender(sender) || sender.tab?.id === undefined) return null;
-      await handleSave(sender.tab.id, msg.meeting, null);
-      return { ok: true };
+      return handleSave(sender.tab.id, msg.meeting, null);
     case 'meeting:end':
       if (!isMeetSender(sender) || sender.tab?.id === undefined) return null;
-      await handleSave(sender.tab.id, msg.meeting, msg.endedAt);
-      return { ok: true };
+      return handleSave(sender.tab.id, msg.meeting, msg.endedAt);
     case 'live:get': {
       if (!isExtensionPage(sender)) return null;
       return (await getLiveMap())[msg.tabId] ?? null;

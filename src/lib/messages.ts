@@ -12,7 +12,14 @@ export type LiveMeetingFields = Pick<
 
 export type Message =
   /** content → SW: a call was joined. SW returns StartReply. */
-  | { type: 'meeting:start'; code: string; detectedTitle: string | null; at: number }
+  | {
+      type: 'meeting:start';
+      code: string;
+      detectedTitle: string | null;
+      at: number;
+      /** Meeting this tab was tracking before the worker asked it to restart. */
+      resumeId: string | null;
+    }
   /** content → SW: incremental save of tracker state. */
   | { type: 'meeting:save'; meeting: LiveMeetingFields }
   /** content → SW: the call ended (participants already finalised). */
@@ -26,13 +33,22 @@ export type Message =
   /** SW → extension pages: data changed, refresh. */
   | { type: 'db:changed' };
 
-export interface StartReply {
+export type StartReply = StartAccepted | { meetingId: null; reason: 'secondary-tab' };
+
+export interface StartAccepted {
   meetingId: string;
   /** Participants to resume from when the same call is rejoined shortly after leaving. */
   participants: ParticipantRecord[];
   startedAt: number;
   paused: boolean;
 }
+
+/**
+ * Reply to meeting:save. `restart` means the stored meeting is gone (deleted, replaced by a
+ * restore) or was closed (e.g. as abandoned after the computer slept): the content script must
+ * stop saving into it and start again via meeting:start.
+ */
+export type SaveReply = { ok: true } | { ok: false; restart: true };
 
 export type LiveGetReply = LiveStatus | null;
 
@@ -50,10 +66,14 @@ function isSession(v: unknown): v is Session {
   return isObj(v) && isNum(v.joinedAt) && (v.leftAt === null || isNum(v.leftAt));
 }
 
+/** Participant keys are "<normalised name>#<avatar hash or 0>" with an optional "~n" suffix. */
+export const PARTICIPANT_KEY_RE = /#(0|[0-9a-f]{1,8})(~\d{1,4})?$/;
+
 export function isParticipant(v: unknown): v is ParticipantRecord {
   return (
     isObj(v) &&
     isStr(v.key, 1_200) &&
+    PARTICIPANT_KEY_RE.test(v.key) &&
     isStr(v.name, 1_000) &&
     isNullableStr(v.avatarUrl, 2_000) &&
     typeof v.isSelf === 'boolean' &&
@@ -76,7 +96,8 @@ export function isLiveMeetingFields(v: unknown): v is LiveMeetingFields {
     typeof v.paused === 'boolean' &&
     Array.isArray(v.participants) &&
     v.participants.length <= 5_000 &&
-    v.participants.every(isParticipant)
+    v.participants.every(isParticipant) &&
+    new Set(v.participants.map((p) => p.key)).size === v.participants.length
   );
 }
 
@@ -88,7 +109,8 @@ export function isMessage(v: unknown): v is Message {
         isStr(v.code, 64) &&
         MEET_CODE_RE.test(v.code) &&
         isNullableStr(v.detectedTitle) &&
-        isNum(v.at)
+        isNum(v.at) &&
+        isNullableStr(v.resumeId, 100)
       );
     case 'meeting:save':
       return isLiveMeetingFields(v.meeting);

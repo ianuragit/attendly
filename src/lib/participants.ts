@@ -6,7 +6,10 @@ import type { SnapshotEntry } from './types';
 
 export interface CleanedName {
   name: string;
-  /** The raw label carried a "(You)"-style marker. */
+  /**
+   * The raw label ended with a "(You)"-style marker. Informational only: a guest can type that
+   * into their own display name, so it must never by itself mark someone as the local user.
+   */
   selfMarker: boolean;
   /** The label describes a screen-share tile rather than a person. */
   presentation: boolean;
@@ -15,7 +18,6 @@ export interface CleanedName {
 // Suffixes Meet appends to a display name. English only; other UI languages fall back to
 // the language-independent data attributes in selectors.ts for self detection.
 const SELF_SUFFIX = /\s*[(（]\s*(you|me)\s*[)）]\s*$/i;
-const BARE_SELF_SUFFIX = /\s+you$/i;
 const DECORATION_SUFFIXES: RegExp[] = [
   /\s*[(（]\s*(presenting|host|meeting host|co-host|guest|external)\s*[)）]\s*$/i,
   /\s*[·•|-]?\s*(meeting host|co-host|presenting|is presenting)\s*$/i,
@@ -38,11 +40,6 @@ export function cleanName(raw: string): CleanedName {
     for (const re of DECORATION_SUFFIXES) name = name.replace(re, '');
     name = name.trim();
     if (name === before) break;
-  }
-  // "Ana You" only counts as a self marker when something precedes it.
-  if (BARE_SELF_SUFFIX.test(name) && name.split(' ').length > 1 && raw.trim().endsWith('You')) {
-    selfMarker = true;
-    name = name.replace(BARE_SELF_SUFFIX, '').trim();
   }
   return { name, selfMarker, presentation };
 }
@@ -148,4 +145,17 @@ export function mergeSources(sources: readonly (readonly SnapshotEntry[])[]): Sn
     out.push(...merged);
   }
   return out;
+}
+
+/**
+ * Only one participant can be the local user. If a snapshot flags several (DOM ambiguity),
+ * trust none of them for this scan rather than hiding a real participant as "self".
+ */
+export function resolveSelf(entries: SnapshotEntry[]): {
+  entries: SnapshotEntry[];
+  ambiguous: boolean;
+} {
+  const selves = entries.filter((e) => e.isSelf).length;
+  if (selves <= 1) return { entries, ambiguous: false };
+  return { entries: entries.map((e) => ({ ...e, isSelf: false })), ambiguous: true };
 }

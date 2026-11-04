@@ -31,6 +31,8 @@ First public release.
   WCAG 2.1 AA checks in CI for every page in both themes.
 - Privacy: no network requests, no analytics, no remote code, strict CSP on extension pages,
   minimal permissions (`storage` and `https://meet.google.com/*`), enforced by a CI check.
+- Hardening from a pre-release code audit (XLSX well-formedness, same-name identity, self
+  detection, sleep/restart recovery, two-tab calls); see `docs/decisions.md`.
 - Documentation: README, privacy policy, Meet DOM notes, design decisions, store listing draft.
 
 [1.0.0]: https://github.com/ianuragit/attendly/releases/tag/v1.0.0

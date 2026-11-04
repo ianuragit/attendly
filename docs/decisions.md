@@ -128,3 +128,25 @@ A running log of judgement calls made where the brief was ambiguous.
   `aria-sort` on sortable headers, `aria-expanded` on disclosure buttons, `role="switch"` toggles,
   text alternatives for the timeline bars and matrix cells, and a polite live region for status
   messages.
+
+## Code audit (pre-1.0.0)
+
+An independent review of the whole codebase found the issues below; all are fixed with
+regression tests (unit tests unless noted).
+
+| #   | Severity | Issue                                                                                                             | Fix                                                                                                                       |
+| --- | -------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1   | High     | `xl/styles.xml` was malformed (missing `>`), so Excel would offer to "repair" every export                        | Fixed; a test now XML-parses every part of every workbook                                                                 |
+| 2   | High     | An avatar-less tile listed first could take a same-name person's record → duplicate + false leave                 | Entries with an avatar are resolved first                                                                                 |
+| 3   | Medium   | "(You)"/"(me)" typed into a display name, or the surname "You", marked a guest as self (hidden by "exclude self") | Self comes only from `data-self-name` or a separate "(You)" element; ambiguous multi-self snapshots are ignored           |
+| 4   | Medium   | A save after the computer slept reopened a closed meeting and credited the gap as attendance                      | Worker refuses saves to ended meetings and the tab resumes by id; scan gaps > 150 s close sessions at the last scan (e2e) |
+| 5   | Medium   | Deleting/replacing data during a live call silently stopped recording for the rest of it                          | Worker replies `restart`; the tab starts a new record (e2e). Delete confirmation warns for live meetings                  |
+| 6   | Medium   | Matrix split a regular attendee's row whenever a namesake joined once                                             | The longest-present same-name record keeps the shared row                                                                 |
+| 7   | Low–Med  | Same call in two tabs created two meetings; concurrent starts could race                                          | Starts are serialised; a second tab stays passive (e2e)                                                                   |
+| 8   | Low      | Avatar selector returned the first https image in DOM order, not the profile picture                              | Selectors are tried in priority order                                                                                     |
+| 9   | Low      | Imported keys like `constructor` resolved to `Object.prototype` members                                           | Own-property mark lookup; participant keys must match the key format and be unique                                        |
+| 10  | Low      | After an extension update mid-call the orphaned content script kept running                                       | It detects the invalidated context, stops and logs a reload hint                                                          |
+| 11  | Low      | A malformed URL hash crashed the dashboard                                                                        | Hash segments are decoded defensively                                                                                     |
+
+Known limitation kept: after a worker-requested restart, up to one heartbeat (15 s) of the call
+between the deletion/closure and the restart is not counted.
