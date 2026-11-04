@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+
+/* Dark mode is class-based so the user's theme setting can override the OS. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-50: #eef6ff;
+  --color-brand-100: #d9eaff;
+  --color-brand-500: #2f6fdb;
+  --color-brand-600: #2459b8;
+  --color-brand-700: #1d4790;
+}
