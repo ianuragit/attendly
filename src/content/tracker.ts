@@ -28,6 +28,12 @@ import type { ParticipantRecord, SnapshotEntry, Timestamp, TrackerState } from '
 export interface TrackerOptions {
   /** How long a participant may be missing before it counts as leaving. */
   leaveDebounceMs: number;
+  /**
+   * Whether the snapshot lists everyone in the call. When false (e.g. Meet's grid shows
+   * "12 others" and the People panel is closed), people who aren't in the snapshot may simply
+   * be off-screen, so no-one is marked as missing; only joins are recorded.
+   */
+  complete?: boolean;
 }
 
 export const DEFAULT_TRACKER_OPTIONS: TrackerOptions = { leaveDebounceMs: 10_000 };
@@ -53,7 +59,7 @@ function resolveRecord(
   claimed: Set<string>,
 ): ParticipantRecord | null {
   const norm = normalizeName(entry.name);
-  const avatar = participantKey(entry.name, entry.avatarUrl).split('#').pop() ?? '0';
+  const avatar = keyAvatar(participantKey(entry.name, entry.avatarUrl));
   const candidates = Object.values(records).filter(
     (r) =>
       !claimed.has(r.key) &&
@@ -136,8 +142,10 @@ export function applySnapshot(
     }
   }
 
+  const complete = options.complete ?? true;
   for (const record of Object.values(records)) {
     if (claimed.has(record.key) || !isOpen(record)) continue;
+    if (!complete) continue;
     record.missingSince ??= now;
     if (now - record.missingSince >= options.leaveDebounceMs) {
       closeOpenSession(record, record.missingSince);

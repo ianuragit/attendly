@@ -26,3 +26,39 @@ A running log of judgement calls made where the brief was ambiguous.
   the bundled module, which requires listing those chunks in `web_accessible_resources` for
   `meet.google.com` only. This is standard for ES-module content scripts; the exposed files
   contain only Attendly's own code.
+
+## Phase 2 — Tracker
+
+- **Identity:** key = normalised name (lowercase, accents stripped) + FNV-1a hash of the avatar
+  URL with size parameters removed (`#0` when there is no avatar). Same-name people with no
+  avatar get `~2`, `~3` suffixes. An entry without an avatar is matched to an existing
+  same-name record so a person doesn't split when their photo is visible in one place only.
+- **Leave timestamp:** a leave is recorded at the first scan where the person was missing, not
+  when the 10 s debounce expires.
+- **Self is always tracked** (flagged `isSelf`); "exclude self" is a _view_ filter applied to
+  lists, matrices, counts and exports. Toggling it is therefore retroactive and lossless.
+- **Pause** closes everyone's open session; paused time is not counted. Resuming opens new
+  sessions for whoever is present.
+
+## Phase 3 — Content script, worker, storage
+
+- **No live-call verification:** the build environment cannot join a real Meet call. Selectors
+  are tested against a fixture and in a Playwright e2e test with the real extension. See
+  `docs/meet-dom-notes.md` for the checklist to run before publishing.
+- **The content script owns the tracker; the service worker owns storage.** Content scripts
+  run on Meet's origin and can't reach the extension's IndexedDB, so they send full tracker
+  state each scan (small: a few KB). The worker merges only tracker-owned fields so dashboard
+  edits (title, notes, group, manual marks) made during a live call are never overwritten.
+- **Data-loss bound:** saves every scan (default 5 s; heartbeat at least every 15 s). Tab close →
+  worker finalises from the last save. Browser crash → meetings with no save for 3 min are
+  closed at their last save on next worker start.
+- **Rejoin window:** rejoining the same meeting code within 5 minutes continues the same record
+  (new sessions are appended) instead of creating a second meeting.
+- **Call end:** the leave button missing for 15 s, a different meeting code in the URL,
+  `pagehide`, or the tab closing.
+- **Empty scans are ignored** (you are always in your own call), so a selector breakage doesn't
+  log everyone as having left.
+- **No "activeTab", "tabs" or "alarms" permissions:** tab-close detection uses
+  `chrome.tabs.onRemoved` (no permission needed for the tab id) and stale sweeps run on worker
+  start-up.
+- **Badge** is set per tab, so it only shows on the Meet tab that is being tracked.

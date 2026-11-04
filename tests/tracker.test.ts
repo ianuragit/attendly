@@ -304,3 +304,23 @@ describe('tracker: finalize', () => {
     ]);
   });
 });
+
+describe('tracker: incomplete snapshots', () => {
+  it('records joins but no leaves while the snapshot is incomplete', () => {
+    let st = run([[0, [p('Ana'), p('Ben')]]]);
+    st = applySnapshot(st, [p('Ana'), p('Cy')], T0 + 5 * S, { ...OPTS, complete: false });
+    st = applySnapshot(st, [p('Ana')], T0 + 60 * S, { ...OPTS, complete: false });
+    expect(one(st, 'Ben').sessions[0]!.leftAt).toBeNull();
+    expect(one(st, 'Ben').missingSince).toBeNull();
+    expect(one(st, 'Cy').sessions).toHaveLength(1);
+    expect(presentCount(st)).toBe(3);
+  });
+
+  it('resumes leave detection once the snapshot is complete again', () => {
+    let st = run([[0, [p('Ana'), p('Ben')]]]);
+    st = applySnapshot(st, [p('Ana')], T0 + 5 * S, { ...OPTS, complete: false });
+    st = applySnapshot(st, [p('Ana')], T0 + 10 * S, OPTS);
+    st = applySnapshot(st, [p('Ana')], T0 + 25 * S, OPTS);
+    expect(one(st, 'Ben').sessions[0]!.leftAt).toBe(T0 + 10 * S);
+  });
+});

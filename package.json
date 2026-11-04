@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "zip": "npm run build && node scripts/zip.mjs",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "idb": "^8.0.4",
