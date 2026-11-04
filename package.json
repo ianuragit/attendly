@@ -18,9 +18,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "zip": "npm run build && node scripts/zip.mjs",
+    "zip": "npm run build && node scripts/check-dist.mjs && node scripts/zip.mjs",
     "icons": "node scripts/generate-icons.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:dist": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",

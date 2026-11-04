@@ -11,6 +11,8 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     target: 'chrome120',
+    // Chrome supports modulepreload natively; the polyfill would add an (extension-local) fetch().
+    modulePreload: { polyfill: false },
   },
   server: {
     port: 5173,
