@@ -37,6 +37,11 @@ describe('isMessage', () => {
     expect(isMessage({ type: 'meeting:end', meeting, endedAt: 3 })).toBe(true);
     expect(isMessage({ type: 'live:get', tabId: 4 })).toBe(true);
     expect(isMessage({ type: 'live:setPaused', tabId: 4, paused: true })).toBe(true);
+    expect(isMessage({ type: 'page:status', state: 'waiting-to-join', code: 'bpn-qubw-rjo' })).toBe(
+      true,
+    );
+    expect(isMessage({ type: 'page:status', state: 'no-meeting', code: null })).toBe(true);
+    expect(isMessage({ type: 'page:get', tabId: 3 })).toBe(true);
   });
 
   it('rejects malformed messages', () => {
@@ -66,6 +71,8 @@ describe('isMessage', () => {
       }),
     ).toBe(false);
     expect(isMessage({ type: 'live:get', tabId: '4' })).toBe(false);
+    expect(isMessage({ type: 'page:status', state: 'hacked', code: null })).toBe(false);
+    expect(isMessage({ type: 'page:status', state: 'no-meeting', code: '<b>' })).toBe(false);
     expect(
       isMessage({ type: 'meeting:start', code: 'abc-defg-hij', detectedTitle: null, at: 1 }),
     ).toBe(false);

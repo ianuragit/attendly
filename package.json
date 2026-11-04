@@ -1,6 +1,6 @@
 {
   "name": "attendly",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Automatic attendance tracking for Google Meet calls. All data stays on your device.",
   "license": "MIT",

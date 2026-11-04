@@ -6,7 +6,7 @@ import { log } from '../lib/log';
 import type { LiveMeetingFields, Message, SaveReply, StartReply } from '../lib/messages';
 import { mergeSources, resolveSelf } from '../lib/participants';
 import { getSettings, onSettingsChanged } from '../lib/settings';
-import type { Settings, SnapshotEntry, TrackerState } from '../lib/types';
+import type { PageState, Settings, SnapshotEntry, TrackerState } from '../lib/types';
 import {
   findPeopleButton,
   findPeopleList,
@@ -63,6 +63,10 @@ export class MeetController {
   private resumeId: string | null = null;
   /** While another tab tracks this call, don't ask to start again before this time. */
   private passiveUntil = 0;
+  /** Last page state reported to the worker while not tracking. */
+  private lastPage: { state: PageState; code: string | null; at: number } | null = null;
+  /** When we first saw what looks like a call without finding the leave button. */
+  private looksLikeCallSince: number | null = null;
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -112,7 +116,8 @@ export class MeetController {
     this.observer?.disconnect();
     if (this.pollTimer) clearTimeout(this.pollTimer);
     this.call = null;
-    log.warn('Attendly was reloaded or updated. Reload this Meet tab to resume tracking.');
+    // Info, not a warning: this is expected after an update and isn't an error in the new copy.
+    log.info('Attendly was reloaded or updated. Reload this Meet tab to resume tracking.');
     return true;
   }
 
@@ -165,12 +170,27 @@ export class MeetController {
       }
     }
 
-    if (!settings.autoTrack || !inCall || !code) return;
     if (!this.call) {
-      if (now < this.passiveUntil) return;
+      const state: PageState | null = !code
+        ? 'no-meeting'
+        : !settings.autoTrack
+          ? 'tracking-off'
+          : now < this.passiveUntil
+            ? 'other-tab'
+            : !inCall
+              ? 'waiting-to-join'
+              : null;
+      if (state !== null || !code) {
+        this.reportPage(state ?? 'no-meeting', code, now);
+        this.checkUndetectedCall(state === 'waiting-to-join', now);
+        return;
+      }
       await this.beginCall(code, now);
       if (!this.call) return;
+      this.lastPage = null;
+      this.looksLikeCallSince = null;
     }
+    if (!settings.autoTrack) return;
 
     const call: ActiveCall = this.call;
     call.lastInCallAt = now;
@@ -205,6 +225,46 @@ export class MeetController {
       }
     }
     await this.save(now, false);
+  }
+
+  /** Tells the worker (for the popup) what this tab sees while it isn't tracking. */
+  private reportPage(state: PageState, code: string | null, now: number): void {
+    const prev = this.lastPage;
+    const changed = !prev || prev.state !== state || prev.code !== code;
+    if (!changed && now - prev.at < 30_000) return;
+    this.lastPage = { state, code, at: now };
+    if (changed) {
+      const why: Record<PageState, string> = {
+        'no-meeting': 'Not on a meeting page.',
+        'waiting-to-join': `On meeting page ${code ?? ''}; waiting until you join the call (leave-call button not seen yet).`,
+        'tracking-off': 'Automatic tracking is turned off in Settings.',
+        'other-tab': `Meeting ${code ?? ''} is already being tracked in another tab.`,
+      };
+      log.info(why[state]);
+    }
+    chrome.runtime
+      .sendMessage({ type: 'page:status', state, code } satisfies Message)
+      .catch(() => this.orphaned());
+  }
+
+  /**
+   * On a meeting page, video tiles but no leave-call button for a while most likely means Meet
+   * changed its controls: say so once, clearly, instead of silently recording nothing.
+   */
+  private checkUndetectedCall(waiting: boolean, now: number): void {
+    const tiles = waiting ? readTiles().entries.length : 0;
+    if (tiles === 0) {
+      this.looksLikeCallSince = null;
+      return;
+    }
+    this.looksLikeCallSince ??= now;
+    if (now - this.looksLikeCallSince > 30_000) {
+      warnOnce(
+        'undetected-call',
+        `Participant tiles are visible (${tiles}) but the leave-call button was not found, so tracking hasn't started. ` +
+          'Meet may have changed its layout; please report this (see docs/troubleshooting.md).',
+      );
+    }
   }
 
   private readParticipants(

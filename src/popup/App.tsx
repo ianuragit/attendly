@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { attendeeCount, meetingDurationMs, meetingTitle } from '../lib/attendance';
 import { listMeetings } from '../lib/db';
 import { log } from '../lib/log';
-import { sendRuntimeMessage, type LiveGetReply } from '../lib/messages';
+import { sendRuntimeMessage, type LiveGetReply, type PageGetReply } from '../lib/messages';
 import { formatDate, formatDuration, formatDurationShort, formatTime } from '../lib/time';
-import type { LiveStatus, MeetingRecord } from '../lib/types';
+import type { LiveStatus, MeetingRecord, PageStatus } from '../lib/types';
 import { useApplyTheme, useDbChanges, useNow, useSettings } from '../ui/hooks';
 import { openDashboard } from '../ui/navigation';
 
@@ -27,6 +27,7 @@ export function App() {
   const [live, setLive] = useState<LiveStatus | null>(null);
   const [recent, setRecent] = useState<MeetingRecord[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState<PageStatus | null>(null);
 
   const refresh = useCallback(async () => {
     const id = await currentTabId();
@@ -35,6 +36,11 @@ export function App() {
       id === null ? null : await sendRuntimeMessage<LiveGetReply>({ type: 'live:get', tabId: id });
     setLive(status ?? null);
     if (!status) {
+      setPage(
+        id === null
+          ? null
+          : ((await sendRuntimeMessage<PageGetReply>({ type: 'page:get', tabId: id })) ?? null),
+      );
       try {
         setRecent((await listMeetings()).slice(0, 3));
       } catch (err) {
@@ -138,9 +144,7 @@ export function App() {
       ) : (
         <section aria-labelledby="recent-heading">
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            {settings.autoTrack
-              ? 'Not in a meeting. Join a Meet call and attendance is recorded automatically.'
-              : 'Automatic tracking is turned off in Settings.'}
+            {notTrackingMessage(page, settings.autoTrack)}
           </p>
           <h2
             id="recent-heading"
@@ -183,4 +187,21 @@ export function App() {
       )}
     </main>
   );
+}
+
+/** Explains why nothing is being recorded in the current tab. */
+function notTrackingMessage(page: PageStatus | null, autoTrack: boolean): string {
+  if (!autoTrack || page?.state === 'tracking-off') {
+    return 'Automatic tracking is turned off in Settings.';
+  }
+  switch (page?.state) {
+    case 'waiting-to-join':
+      return `Meeting ${page.code ?? ''} is open. Recording starts as soon as you join the call. If you are already in the call and this doesn't change within a few seconds, reload the tab.`;
+    case 'other-tab':
+      return `Meeting ${page.code ?? ''} is already being recorded in another tab.`;
+    case 'no-meeting':
+      return 'This Meet page is not a meeting. Join a call and attendance is recorded automatically.';
+    default:
+      return 'Not in a meeting. Join a Meet call and attendance is recorded automatically. If a call is already open in this tab, reload the tab: Chrome only starts Attendly in tabs opened after it was installed or updated.';
+  }
 }

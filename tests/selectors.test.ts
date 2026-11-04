@@ -22,6 +22,11 @@ describe('meetingCodeFromPath', () => {
     ['/abc-defg-hij', 'abc-defg-hij'],
     ['/ABC-DEFG-HIJ', 'abc-defg-hij'],
     ['/abc-defg-hij/', 'abc-defg-hij'],
+    ['/meet/bpn-qubw-rjo', 'bpn-qubw-rjo'],
+    ['/meet/bpn-qubw-rjo/', 'bpn-qubw-rjo'],
+    ['/_meet/abc-defg-hij', 'abc-defg-hij'],
+    ['/meet/lookup/myclass', 'myclass'],
+    ['/abc-defg-hijk-lmn', null],
     ['/lookup/myclass', 'myclass'],
     ['/', null],
     ['/landing', null],
@@ -38,6 +43,22 @@ describe('call presence', () => {
   });
   it('is false in the lobby', () => {
     set(meetHtml({ tiles: [], inCall: false }));
+    expect(isInCall()).toBe(false);
+  });
+  it('finds the call_end glyph in a span inside a role=button element', () => {
+    set(
+      '<div role="button" tabindex="0"><span class="google-symbols notranslate">call_end</span></div>',
+    );
+    expect(isInCall()).toBe(true);
+  });
+  it('accepts the aria-label on non-button controls and tooltips', () => {
+    set('<div role="button" aria-label="Leave call"></div>');
+    expect(isInCall()).toBe(true);
+    set('<span data-tooltip="Leave call"></span>');
+    expect(isInCall()).toBe(true);
+  });
+  it('ignores a call_end word that is not an icon in a control', () => {
+    set('<p>call_end</p><i>call_end</i>');
     expect(isInCall()).toBe(false);
   });
   it('falls back to the aria-label', () => {

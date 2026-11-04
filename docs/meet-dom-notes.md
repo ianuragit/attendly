@@ -11,22 +11,30 @@ are**. Every selector lives in [`src/content/selectors.ts`](../src/content/selec
 > call** — the build environment had no Google account or access to meet.google.com.
 > Before publishing, run the checklist at the bottom on a real call and update this file.
 
+## Field reports
+
+- **2026-11-04 (v1.0.0):** a real call was served at `https://meet.google.com/meet/bpn-qubw-rjo`.
+  The code parser only accepted `/<code>`, so nothing was tracked. Fixed in 1.0.1. Leave-call
+  matching was also widened to `role="button"` controls and `<span>` glyphs as a precaution.
+  The leave-button and tile hooks are still unconfirmed on a live call; use the diagnostic in
+  `docs/troubleshooting.md` to capture the real structure.
+
 ## Hooks, in order of preference
 
-| What                    | Primary hook                                                      | Fallbacks                                                           | Confidence |
-| ----------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- | ---------- |
-| In the call (not lobby) | A `<button>` containing a Material icon whose text is `call_end`  | `aria-label` containing "Leave call"/"Hang up"; `[jsname=CQylAd]`   | High       |
-| Meeting code            | URL path `/abc-defg-hij` (also `/lookup/<name>`)                  | —                                                                   | High       |
-| Meeting title           | `[data-meeting-title]` attribute                                  | `document.title` of the form "Meet – Title"                         | Medium     |
-| Participant tile        | `[data-participant-id]`                                           | `[data-requested-participant-id]`                                   | High       |
-| Name inside a tile      | `[data-self-name]` (own tile), `.notranslate`                     | `[jsname=EydYod]`, `.zWGUib`, tile `aria-label`                     | Medium     |
-| Self                    | `[data-self-name]` inside the tile; "(You)" in the People panel   | Name suffix "(You)"                                                 | Medium     |
-| People panel list       | `[role=list]` with `aria-label` containing "participant"/"people" | Any `[role=list]` containing `[role=listitem][data-participant-id]` | Medium     |
-| People panel row name   | Row `aria-label`                                                  | `.notranslate`, `.zWGUib`                                           | Medium     |
-| People button           | `button[data-panel-id="1"]`                                       | Icon text `people`/`group`/`groups`; English `aria-label`           | Low–Medium |
-| Participant count       | Digits in the People button (icon text removed)                   | Digits in its `aria-label`                                          | Low        |
-| Avatar                  | `<img src="https://lh3.googleusercontent.com/…">` in tile/row     | Any `https://` image                                                | Medium     |
-| Overflow tile           | Tile whose label is "N others"                                    | —                                                                   | Medium     |
+| What                    | Primary hook                                                                          | Fallbacks                                                           | Confidence |
+| ----------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------- |
+| In the call (not lobby) | A `<button>` containing a Material icon whose text is `call_end`                      | `aria-label` containing "Leave call"/"Hang up"; `[jsname=CQylAd]`   | High       |
+| Meeting code            | Code in any URL path segment: `/abc-defg-hij`, `/meet/abc-defg-hij`, `/lookup/<name>` | —                                                                   | High       |
+| Meeting title           | `[data-meeting-title]` attribute                                                      | `document.title` of the form "Meet – Title"                         | Medium     |
+| Participant tile        | `[data-participant-id]`                                                               | `[data-requested-participant-id]`                                   | High       |
+| Name inside a tile      | `[data-self-name]` (own tile), `.notranslate`                                         | `[jsname=EydYod]`, `.zWGUib`, tile `aria-label`                     | Medium     |
+| Self                    | `[data-self-name]` inside the tile; "(You)" in the People panel                       | Name suffix "(You)"                                                 | Medium     |
+| People panel list       | `[role=list]` with `aria-label` containing "participant"/"people"                     | Any `[role=list]` containing `[role=listitem][data-participant-id]` | Medium     |
+| People panel row name   | Row `aria-label`                                                                      | `.notranslate`, `.zWGUib`                                           | Medium     |
+| People button           | `button[data-panel-id="1"]`                                                           | Icon text `people`/`group`/`groups`; English `aria-label`           | Low–Medium |
+| Participant count       | Digits in the People button (icon text removed)                                       | Digits in its `aria-label`                                          | Low        |
+| Avatar                  | `<img src="https://lh3.googleusercontent.com/…">` in tile/row                         | Any `https://` image                                                | Medium     |
+| Overflow tile           | Tile whose label is "N others"                                                        | —                                                                   | Medium     |
 
 Language independence: the icon-ligature (`call_end`, `people`) and `data-*` hooks work in any
 UI language. The English `aria-label` and suffix ("(You)", "Presenting") fallbacks only work

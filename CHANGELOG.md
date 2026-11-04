@@ -4,6 +4,24 @@ All notable changes to Attendly are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-11-04
+
+### Fixed
+
+- Calls served at `meet.google.com/meet/<code>` were not detected (the popup kept saying
+  "Not in a meeting"). Meeting codes are now found in any part of the URL path.
+- In-call detection also finds the leave-call control when Meet renders it as a
+  `role="button"` element or uses a `<span>` icon, and accepts more label variants.
+- "Reload this Meet tab" after an update is logged as information, not as a warning.
+
+### Added
+
+- The popup explains why nothing is being recorded: waiting for you to join, call already
+  recorded in another tab, tracking turned off, or Attendly not running in the tab (reload it).
+- Console diagnostics, plus a warning when participant tiles are visible but the leave-call
+  control isn't found.
+- `docs/troubleshooting.md` with a read-only diagnostic snippet for reporting detection problems.
+
 ## [1.0.0] - 2026-11-04
 
 First public release.
@@ -36,4 +54,5 @@ First public release.
 - Automated GitHub Release workflow publishing a ready-to-install `attendly.zip`.
 - Documentation: README, privacy policy, Meet DOM notes, design decisions, store listing draft.
 
+[1.0.1]: https://github.com/ianuragit/attendly/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ianuragit/attendly/releases/tag/v1.0.0
