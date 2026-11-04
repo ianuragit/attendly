@@ -93,3 +93,24 @@ A running log of judgement calls made where the brief was ambiguous.
   by phone). They are stored as a participant with no sessions plus a "present" mark, and live
   saves preserve them.
 - **Deleting a group** keeps its meetings (they become ungrouped).
+
+## Phase 7 — Export and backup
+
+- **XLSX: own minimal writer instead of SheetJS.** The brief suggested SheetJS. The npm `xlsx`
+  package is frozen at 0.18.5 with published advisories (CVE-2023-30533, CVE-2024-22363), and
+  SheetJS's patched builds are distributed only from `cdn.sheetjs.com`, which this build
+  environment's network policy blocks. Attendly only _writes_ simple tables, so
+  `src/lib/xlsx.ts` emits the SpreadsheetML parts directly and zips them with `fflate`
+  (~9 KB, no dependencies). Output was verified to open in openpyxl and LibreOffice. Strings
+  are written as inline strings, never formulas. To switch to SheetJS later, replace
+  `writeXlsx()`; the export tables in `lib/export.ts` are library-agnostic.
+- **CSV:** RFC 4180, CRLF, UTF-8 with BOM (so Excel shows accents correctly). Cells starting
+  with `= + - @ TAB CR` are prefixed with `'` to prevent formula injection — participant names
+  come from other people and are untrusted.
+- **Times in exports** are local "YYYY-MM-DD HH:MM:SS" strings (locale-independent and sortable);
+  durations are minutes with one decimal.
+- **Exports honour the current settings** (exclude self, minimum duration, manual marks).
+- **Backup format:** `{ app: "attendly", version: 1, exportedAt, settings, groups, meetings }`.
+  Restore validates every field, drops unknown keys, clamps sizes, closes any meetings that were
+  live at backup time, and drops group references that aren't in the file. "Merge" upserts by id;
+  "Replace" clears data first (and restores settings) after a confirmation.

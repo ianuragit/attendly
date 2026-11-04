@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { useApplyTheme, useSettings } from '../ui/hooks';
-import { DataProvider } from './data';
+import { BackupPanel } from './components/BackupPanel';
+import { DataProvider, useData } from './data';
+import { useExports } from './exports';
 import { GroupDetailPage } from './pages/GroupDetailPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { MeetingDetailPage } from './pages/MeetingDetailPage';
@@ -14,30 +16,53 @@ const NAV: { label: string; route: Route; match: Route['name'][] }[] = [
 ];
 
 export function App() {
+  return (
+    <DataProvider>
+      <Shell />
+    </DataProvider>
+  );
+}
+
+function Shell() {
   const { settings, loaded } = useSettings();
   useApplyTheme(settings.theme);
   const route = useRoute();
+  const { meetings, groups } = useData();
+  const exports = useExports(settings, meetings, groups);
 
   let page: ReactNode;
   switch (route.name) {
     case 'meetings':
-      page = <MeetingsPage settings={settings} />;
+      page = <MeetingsPage settings={settings} onExportAll={exports.exportAll} />;
       break;
     case 'meeting':
-      page = <MeetingDetailPage id={route.id} settings={settings} />;
+      page = (
+        <MeetingDetailPage
+          id={route.id}
+          settings={settings}
+          actions={{ exportMeeting: exports.exportMeeting, copyMeeting: exports.copyMeeting }}
+        />
+      );
       break;
     case 'groups':
       page = <GroupsPage />;
       break;
     case 'group':
-      page = <GroupDetailPage id={route.id} settings={settings} />;
+      page = (
+        <GroupDetailPage
+          id={route.id}
+          settings={settings}
+          actions={{ exportGroup: exports.exportGroup }}
+        />
+      );
       break;
-    default:
-      page = <p className="text-slate-600 dark:text-slate-400">Coming soon.</p>;
+    case 'settings':
+      page = <BackupPanel settings={settings} />;
+      break;
   }
 
   return (
-    <DataProvider>
+    <>
       <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <a
           href="#main"
@@ -86,6 +111,7 @@ export function App() {
           {loaded ? page : null}
         </main>
       </div>
-    </DataProvider>
+      {exports.dialog}
+    </>
   );
 }

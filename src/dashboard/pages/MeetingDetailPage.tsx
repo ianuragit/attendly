@@ -217,7 +217,10 @@ export function MeetingDetailPage({
             {actions.copyMeeting && (
               <Button
                 onClick={() =>
-                  void actions.copyMeeting?.(meeting).then(() => setStatus('Attendee list copied'))
+                  void actions
+                    .copyMeeting?.(meeting)
+                    .then(() => setStatus('Attendee list copied'))
+                    .catch(() => setStatus('Could not copy to the clipboard'))
                 }
               >
                 Copy list
